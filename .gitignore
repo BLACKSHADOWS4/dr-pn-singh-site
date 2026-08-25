@@ -1,0 +1,5 @@
+node_modules/
+.env
+data/appointments.json
+data/messages.json
+npm-debug.log*

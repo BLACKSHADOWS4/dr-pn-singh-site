@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Reception | Dr. P. N. Singh Clinic</title>
+	<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+	<div class="app-shell">
+		<header class="topbar">
+			<div class="brand-mark" aria-hidden="true">PN</div>
+			<div class="brand-copy">
+				<strong>Dr. P. N. Singh Clinic</strong>
+				<span>Reception desk</span>
+			</div>
+			<div class="topbar-actions">
+				<span class="sync-status"><span class="status-dot"></span><span id="syncText">Ready</span></span>
+				<button class="button button-quiet" id="logoutButton" type="button">Sign out</button>
+			</div>
+		</header>
+
+		<main class="main-content">
+			<section class="page-heading">
+				<div>
+					<p class="eyebrow">Clinic operations</p>
+					<h1>Appointments</h1>
+					<p class="heading-note">Review requests, confirm visits, and record payments.</p>
+				</div>
+				<button class="button button-outline" id="refreshButton" type="button"><span aria-hidden="true">↻</span> Refresh</button>
+			</section>
+
+			<section class="metrics" aria-label="Appointment summary">
+				<article class="metric metric-new"><span class="metric-label">New</span><strong id="newCount">0</strong><span class="metric-caption">Needs review</span></article>
+				<article class="metric metric-accepted"><span class="metric-label">Accepted</span><strong id="acceptedCount">0</strong><span class="metric-caption">Confirmed visits</span></article>
+				<article class="metric metric-today"><span class="metric-label">Today</span><strong id="todayCount">0</strong><span class="metric-caption">All statuses</span></article>
+				<article class="metric metric-completed"><span class="metric-label">Completed</span><strong id="completedCount">0</strong><span class="metric-caption">Finished visits</span></article>
+			</section>
+
+			<section class="toolbar">
+				<label class="search-box" for="searchInput"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Search appointment ID" autocomplete="off"><kbd>/</kbd></label>
+				<div class="toolbar-meta"><span id="appointmentCount">0 appointments</span><span class="auto-refresh">Auto-refreshes every 5 seconds</span></div>
+			</section>
+
+			<section class="table-panel">
+				<div class="table-wrap">
+					<table>
+						<thead><tr><th>Appointment ID</th><th>Patient No.</th><th>Patient Name</th><th>Phone</th><th>Date &amp; time</th><th>Mode</th><th>Status</th><th>Email</th><th><span class="sr-only">Action</span></th></tr></thead>
+						<tbody id="appointmentsBody"><tr><td class="table-state" colspan="9"><span class="loader"></span>Loading appointments...</td></tr></tbody>
+					</table>
+				</div>
+			</section>
+		</main>
+	</div>
+
+	<div class="modal-backdrop" id="modalBackdrop" hidden>
+		<section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+			<button class="modal-close" id="closeModal" type="button" aria-label="Close">×</button>
+			<div id="modalContent"></div>
+		</section>
+	</div>
+
+	<div class="toast" id="toast" role="status" aria-live="polite"></div>
+	<div class="login-screen" id="loginScreen">
+		<form class="login-box" id="loginForm">
+			<div class="brand-mark" aria-hidden="true">PN</div>
+			<p class="eyebrow">Reception desk</p>
+			<h1>Sign in to appointments</h1>
+			<p class="login-note">Enter the clinic admin key to continue.</p>
+			<label for="adminKeyInput">Admin key</label>
+			<input id="adminKeyInput" type="password" autocomplete="current-password" required>
+			<p class="login-error" id="loginError" aria-live="polite"></p>
+			<button class="button action-primary" type="submit">Sign in</button>
+		</form>
+	</div>
+	<script src="admin.js"></script>
+</body>
+</html>
