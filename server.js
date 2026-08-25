@@ -5,6 +5,11 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 
 // ========================================
+// 1. INITIALIZE APP FIRST (CRITICAL FIX)
+// ========================================
+const app = express();
+
+// ========================================
 // DATABASE CONNECTION (VERCEL OPTIMIZED)
 // ========================================
 const MONGODB_URI = process.env.MONGODB_URI || '';
