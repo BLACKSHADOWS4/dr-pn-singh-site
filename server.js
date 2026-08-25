@@ -5,31 +5,33 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 
 // ========================================
-// DATABASE CONNECTION
+// DATABASE CONNECTION (VERCEL OPTIMIZED)
 // ========================================
 const MONGODB_URI = process.env.MONGODB_URI || '';
 
-let cachedConnection = null;
 async function connectToDatabase() {
-    if (cachedConnection && mongoose.connection.readyState === 1) {
-        return cachedConnection;
+    if (mongoose.connection.readyState === 1) {
+        return;
     }
-    console.log("Connecting to MongoDB...");
-    cachedConnection = await mongoose.connect(MONGODB_URI);
-    console.log("MongoDB Connected Successfully!");
-    return cachedConnection;
+    try {
+        console.log("Connecting to MongoDB Atlas...");
+        await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000 // Timeout quickly if it fails instead of hanging
+        });
+        console.log("MongoDB Connected Successfully!");
+    } catch (err) {
+        console.error("Database connection error:", err);
+        throw err;
+    }
 }
 
-const app = express();
-
-// Ensure database connects before any API route runs
+// Middleware to connect before API routes
 app.use(async (req, res, next) => {
-    if (req.path.startsWith('/api') && MONGODB_URI) {
+    if (req.path.startsWith('/api')) {
         try {
             await connectToDatabase();
         } catch (err) {
-            console.error('Database connection error:', err);
-            return res.status(500).json({ ok: false, message: 'Database connection failed' });
+            return res.status(500).json({ ok: false, message: 'Database connection failed on server.' });
         }
     }
     next();
@@ -274,7 +276,7 @@ app.post('/api/appointments', async (req, res) => {
     const name = clean(b.name, 100);
     const phone = clean(b.phone, 30);
     const mail = clean(b.email, 120);
-    const date = clean(b.date, 10);
+    let date = clean(b.date, 10);
     const time = clean(b.time, 20);
     const mode = clean(b.mode, 30);
     const concern = clean(b.concern, 500);
@@ -285,7 +287,13 @@ app.post('/api/appointments', async (req, res) => {
     if (!indianMobile(phone)) {
         return res.status(400).json({ ok: false, message: 'Please enter a valid 10-digit Indian mobile number.' });
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    // If the user's browser sent DD/MM/YYYY, convert it to YYYY-MM-DD safely
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+        const [d, m, y] = date.split('/');
+        date = `${y}-${m}-${d}`;
+    }
+
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ ok: false, message: 'Please choose a valid date.' });
     }
     const requestedDate = new Date(`${date}T00:00:00`);
