@@ -35,18 +35,18 @@
 		$('#appointmentCount').textContent = `${appointments.length} appointment${appointments.length === 1 ? '' : 's'}`;
 		if (!appointments.length) { $('#appointmentsBody').innerHTML = `<tr><td class="table-state" colspan="9">${query ? 'No appointment matches that ID.' : 'No appointments yet.'}</td></tr>`; return; }
 		$('#appointmentsBody').innerHTML = appointments.map(appointment => `<tr>
-			<td class="id-cell">${escapeHtml(appointment.appointmentNumber)}</td>
-			<td>${escapeHtml(appointment.patientNumber || '—')}</td>
-			<td class="patient-cell"><strong>${escapeHtml(appointment.name)}</strong></td>
-			<td>${escapeHtml(appointment.phone)}</td>
-			<td class="date-cell">${formatDate(appointment.date)}<br><small>${escapeHtml(appointment.time)}</small></td>
-			<td><span class="mode">${escapeHtml(appointment.mode)}</span></td>
-			<td>${statusBadge(appointment)}</td><td class="email-cell">${escapeHtml(appointment.email || '—')}</td>
-			<td><button class="open-button" data-id="${escapeHtml(appointment.id)}" type="button">Open</button></td></tr>`).join('');
+			<td data-label="Appointment ID" class="id-cell">${escapeHtml(appointment.appointmentNumber)}</td>
+			<td data-label="Patient No.">${escapeHtml(appointment.patientNumber || '—')}</td>
+			<td data-label="Patient Name" class="patient-cell"><strong>${escapeHtml(appointment.name)}</strong></td>
+			<td data-label="Phone">${escapeHtml(appointment.phone)}</td>
+			<td data-label="Date & time" class="date-cell">${formatDate(appointment.date)}<br><small>${escapeHtml(appointment.time)}</small></td>
+			<td data-label="Mode"><span class="mode">${escapeHtml(appointment.mode)}</span></td>
+			<td data-label="Status">${statusBadge(appointment)}</td><td data-label="Email" class="email-cell">${escapeHtml(appointment.email || '—')}</td>
+			<td data-label="Action"><button class="open-button" data-id="${escapeHtml(appointment.id)}" type="button">Open</button></td></tr>`).join('');
 	}
 
 	async function loadAppointments(showLoading = false) {
-		if (showLoading) $('#appointmentsBody').innerHTML = '<tr><td class="table-state" colspan="10"><span class="loader"></span>Loading appointments...</td></tr>';
+		if (showLoading) $('#appointmentsBody').innerHTML = '<tr><td class="table-state" colspan="9"><span class="loader"></span>Loading appointments...</td></tr>';
 		$('#syncText').textContent = 'Syncing'; $('.status-dot').classList.add('busy');
 		try { const data = await request('/api/admin/appointments'); state.appointments = data.appointments || []; renderMetrics(); renderTable(); $('#syncText').textContent = `Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`; }
 		catch (error) { showToast(error.message, true); $('#syncText').textContent = 'Sync failed'; }

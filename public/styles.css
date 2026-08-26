@@ -21,6 +21,7 @@ html{
 
 body{
     margin:0;
+    overflow-x:hidden;
     background:var(--cream);
     color:var(--navy);
     font-family:"DM Sans",Arial,sans-serif;
@@ -1202,7 +1203,7 @@ textarea{
    MOBILE
 ========================= */
 
-@media(max-width:760px){
+@media(max-width:900px){
     html{
     scroll-padding-top:90px;
     }
@@ -1277,11 +1278,11 @@ textarea{
     }
 
     .doctor-photo-wrap{
-        width:100vw;
-        max-width:none;
+        width:min(100%,420px);
+        max-width:100%;
         height:390px;
-        margin-left:60%;
-        transform:translateX(-50%);
+        margin:0 auto;
+        transform:none;
         border-radius:0 32px 32px 0;
         overflow:hidden;
 }
@@ -1622,7 +1623,7 @@ textarea{
 
     .doctor-photo-wrap{
     height:215px;
-    width:72%;
+        width:100%;
     max-width:300px;
     border-radius:22px 22px 0 0;
 }

@@ -384,7 +384,7 @@ function admin(req, res, next) {
 // ADMIN ROUTES
 // ========================================
 app.get('/api/admin/appointments', admin, async (req, res) => {
-    const appointments = await Appointment.find().sort({ createdAt: -1 });
+    const appointments = await Appointment.find({ date: { $gte: todayString() } }).sort({ date: 1, time: 1, createdAt: -1 });
     res.json({ ok: true, appointments });
 });
 
