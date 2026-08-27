@@ -57,8 +57,6 @@ const CLINIC_PAYMENT_NAME = process.env.CLINIC_PAYMENT_NAME || 'Dr. P. N. Singh'
 
 const WA_TEMPLATE_REQUEST_RECEIVED = process.env.WHATSAPP_TEMPLATE_REQUEST_RECEIVED || 'appointment_request_received';
 const WA_TEMPLATE_CLINIC_NEW_APPOINTMENT = process.env.WHATSAPP_TEMPLATE_CLINIC_ALERT || 'clinic_new_appointment';
-const WA_TEMPLATE_ACCEPTED = process.env.WHATSAPP_TEMPLATE_ACCEPTED || 'appointment_accepted';
-const WA_TEMPLATE_CANCELLED = process.env.WHATSAPP_TEMPLATE_CANCELLED || 'appointment_cancelled';
 const WA_TEMPLATE_LANGUAGE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
 
 // ========================================
@@ -179,7 +177,7 @@ async function generatePatientNumber() {
 }
 
 // ========================================
-// WHATSAPP FUNCTIONS
+// WHATSAPP FUNCTIONS & INTERACTIVE BUTTONS
 // ========================================
 const whatsappConfigured = () => {
     return WHATSAPP_ENABLED && Boolean(WHATSAPP_ACCESS_TOKEN) && Boolean(WHATSAPP_PHONE_NUMBER_ID);
@@ -230,6 +228,50 @@ async function sendWhatsAppTemplate(phone, templateName, parameters) {
     }
 }
 
+// Helper to send raw WhatsApp interactive button payloads (Session Message)
+async function sendWhatsAppInteractive(phone, messageBody, buttons) {
+    if (!WHATSAPP_ENABLED) return { ok: false, skipped: true };
+    const recipient = whatsappPhone(phone);
+    if (!recipient) return { ok: false, reason: 'Invalid phone' };
+
+    const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    const body = {
+        messaging_product: 'whatsapp',
+        to: recipient,
+        type: 'interactive',
+        interactive: {
+            type: 'button',
+            body: { text: messageBody },
+            action: {
+                buttons: buttons.map((btn, index) => ({
+                    type: 'reply',
+                    reply: { id: `btn_${index}_${Date.now()}`, title: btn.substring(0, 20) } // WhatsApp max title length is 20 chars
+                }))
+            }
+        }
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            console.error('[WhatsApp] Interactive message error:', JSON.stringify(data, null, 2));
+            return { ok: false, error: data };
+        }
+        return { ok: true, data };
+    } catch (error) {
+        console.error('[WhatsApp] Interactive network error:', error);
+        return { ok: false, error: error.message };
+    }
+}
+
 async function sendAppointmentRequestReceived(appointment) {
     return sendWhatsAppTemplate(appointment.phone, WA_TEMPLATE_REQUEST_RECEIVED, [
         appointment.name, formatDate(appointment.date), appointment.time, appointment.mode
@@ -244,15 +286,31 @@ async function sendClinicNewAppointment(appointment) {
 }
 
 async function sendAppointmentAccepted(appointment) {
-    return sendWhatsAppTemplate(appointment.phone, WA_TEMPLATE_ACCEPTED, [
+    // 1. Send the official approved template first
+    const templateResult = await sendWhatsAppTemplate(appointment.phone, 'appointment_accepted', [
         appointment.name, formatDate(appointment.date), appointment.time, appointment.mode, appointment.patientNumber
     ]);
+
+    // 2. Send your custom AI assistant greeting + 3 Interactive Buttons immediately after
+    const assistantMessage = `Hello Sir/Ma'am, I am your clinic's virtual assistant here to help guide you. Your appointment request has been accepted! Thank you for booking with Dr. P. N. Singh's clinic. Here is your confirmed patient number: *#${appointment.patientNumber}*.`;
+    const buttons = ['📋 View Details', '📍 Clinic Location', '❓ FAQs'];
+    
+    await sendWhatsAppInteractive(appointment.phone, assistantMessage, buttons);
+    return templateResult;
 }
 
 async function sendAppointmentCancelled(appointment) {
-    return sendWhatsAppTemplate(appointment.phone, WA_TEMPLATE_CANCELLED, [
+    // 1. Send the official approved cancellation template first
+    const templateResult = await sendWhatsAppTemplate(appointment.phone, WA_TEMPLATE_CANCELLED, [
         appointment.name, formatDate(appointment.date), appointment.time
     ]);
+
+    // 2. Send your empathetic cancellation message + 3 Interactive Buttons immediately after
+    const cancelMessage = `We are sorry to see your appointment had to be cancelled. If you need assistance or wish to plan for another day, please feel free to reach out to us.`;
+    const buttons = ['📅 Pre-book Tomorrow', '📞 Contact Clinic', '❓ FAQs'];
+
+    await sendWhatsAppInteractive(appointment.phone, cancelMessage, buttons);
+    return templateResult;
 }
 
 // ========================================
@@ -292,7 +350,6 @@ app.post('/api/appointments', async (req, res) => {
     if (!indianMobile(phone)) {
         return res.status(400).json({ ok: false, message: 'Please enter a valid 10-digit Indian mobile number.' });
     }
-    // If the user's browser sent DD/MM/YYYY, convert it to YYYY-MM-DD safely
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
         const [d, m, y] = date.split('/');
         date = `${y}-${m}-${d}`;
@@ -326,7 +383,6 @@ app.post('/api/appointments', async (req, res) => {
         payment: { status: 'unpaid', amount: null, method: null, paidAt: null }
     };
 
-    // Save to MongoDB
     await Appointment.create(appointment);
 
     const whatsappResult = await sendAppointmentRequestReceived(appointment);
@@ -365,7 +421,6 @@ app.post('/api/contact', async (req, res) => {
         name, email: mail, phone, message
     };
 
-    // Save to MongoDB
     await Message.create(contactMessage);
 
     res.status(201).json({ ok: true, message: 'Your message has been received. The clinic will get back to you.' });
