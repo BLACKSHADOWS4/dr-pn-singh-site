@@ -100,9 +100,23 @@ const messageSchema = new mongoose.Schema({
     message: String
 });
 
+const sessionSchema = new mongoose.Schema({
+    phone: { type: String, required: true, unique: true },
+    step: { type: String, default: 'idle' },
+    data: {
+        name: String,
+        date: String,
+        time: String,
+        mode: String,
+        concern: String
+    },
+    updatedAt: { type: String, default: () => new Date().toISOString() }
+});
+
 const Appointment = mongoose.model('Appointment', appointmentSchema);
 const Counter = mongoose.model('Counter', counterSchema);
 const Message = mongoose.model('Message', messageSchema);
+const Session = mongoose.model('Session', sessionSchema);
 
 // ========================================
 // MIDDLEWARE
@@ -305,7 +319,6 @@ async function sendClinicNewAppointment(appointment) {
 }
 
 async function sendAppointmentAccepted(appointment) {
-    // Correct Meta template parameter ordering: [Name, PatientNumber, Date, Time, Mode]
     const templateResult = await sendWhatsAppTemplate(appointment.phone, 'appointment_accepted', [
         appointment.name, appointment.patientNumber, formatDate(appointment.date), appointment.time, appointment.mode
     ]);
@@ -557,7 +570,6 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
     try {
         const body = req.body;
-        console.log('[Webhook] Received:', JSON.stringify(body, null, 2));
 
         if (body.object === 'whatsapp_business_account') {
             for (const entry of body.entry || []) {
@@ -566,6 +578,12 @@ app.post('/webhook', async (req, res) => {
                     if (value && value.messages && value.messages.length > 0) {
                         const message = value.messages[0];
                         const senderPhone = message.from;
+
+                        // Find or initialize session for this phone number
+                        let session = await Session.findOne({ phone: senderPhone });
+                        if (!session) {
+                            session = await Session.create({ phone: senderPhone, step: 'idle', data: {} });
+                        }
 
                         // 1. Handle interactive button clicks
                         if (message.type === 'interactive' && message.interactive?.button_reply) {
@@ -583,19 +601,85 @@ app.post('/webhook', async (req, res) => {
                             } else if (buttonTitle.includes('Fees') || buttonTitle.includes('Timings')) {
                                 const feeText = `💵 *Fees & Consultation Timings*\n\n• *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n• *Fee:* ₹400 per session\n• *Clinic Hours:* Monday to Saturday, 10:00 AM – 7:00 PM (Closed Sundays).`;
                                 await sendWhatsAppText(senderPhone, feeText);
-                            } else if (buttonTitle.includes('Book')) {
-                                const bookText = `📅 *Online Appointment Booking*\n\nYou can select your preferred slot and consultation mode directly on our official portal:\n👉 https://drpnsingh.vercel.app/`;
-                                await sendWhatsAppText(senderPhone, bookText);
+                            } else if (buttonTitle.includes('Book') || buttonTitle.includes('Pre-book')) {
+                                // Start WhatsApp Booking Flow!
+                                session.step = 'awaiting_name';
+                                session.data = {};
+                                await session.save();
+                                await sendWhatsAppText(senderPhone, `📅 *WhatsApp Appointment Booking*\n\nLet's get you scheduled! First, please reply with your **Full Name**:`);
                             } else if (buttonTitle.includes('Contact')) {
                                 const contactText = `📞 *Clinic Contact*\n\n• Clinic Desk: Available during OPD hours\n• Address: Bilandpur New Colony, Gorakhpur\n• Online Portal: https://drpnsingh.vercel.app/`;
                                 await sendWhatsAppText(senderPhone, contactText);
                             }
                         }
-                        // 2. Handle standard incoming text messages ("Hii", "Hello", etc.)
+                        // 2. Handle Conversational Text Inputs based on Session State
                         else if (message.type === 'text') {
-                            const greeting = `Hello! I am Dr. P. N. Singh Clinic's virtual assistant. How can we assist you today?`;
-                            const menuButtons = ['📅 Book Appointment', '📍 Clinic Location', '💵 Fees & Timings'];
-                            await sendWhatsAppInteractive(senderPhone, greeting, menuButtons);
+                            const userText = message.text.body.trim();
+
+                            if (session.step === 'awaiting_name') {
+                                session.data.name = clean(userText, 100);
+                                session.step = 'awaiting_date';
+                                await session.save();
+                                await sendWhatsAppText(senderPhone, `Thank you, *${session.data.name}*.\n\nNow, what date would you like to book? (Please enter in format: *YYYY-MM-DD*, e.g., 2026-09-01)`);
+                            } 
+                            else if (session.step === 'awaiting_date') {
+                                session.data.date = clean(userText, 10);
+                                session.step = 'awaiting_time';
+                                await session.save();
+                                await sendWhatsAppText(senderPhone, `Got it. What preferred time slot would you like? (e.g., *11:00 AM* or *Evening*)`);
+                            } 
+                            else if (session.step === 'awaiting_time') {
+                                session.data.time = clean(userText, 20);
+                                session.step = 'awaiting_mode';
+                                await session.save();
+                                await sendWhatsAppText(senderPhone, `Please choose your consultation mode:\n\n1️⃣ *Clinic Visit*\n2️⃣ *Online Consultation*\n\n(Simply reply with *Clinic* or *Online*)`);
+                            } 
+                            else if (session.step === 'awaiting_mode') {
+                                session.data.mode = clean(userText, 30);
+                                session.step = 'awaiting_concern';
+                                await session.save();
+                                await sendWhatsAppText(senderPhone, `Almost done! Do you have any specific health concern or symptoms to share? \n\n*(Type your concern or simply type **None** or **Skip** to bypass)*`);
+                            } 
+                            else if (session.step === 'awaiting_concern') {
+                                const rawConcern = clean(userText, 500);
+                                session.data.concern = (rawConcern.toLowerCase() === 'none' || rawConcern.toLowerCase() === 'skip') ? '' : rawConcern;
+                                session.step = 'idle';
+                                await session.save();
+
+                                // Finalize and create appointment in database!
+                                const appointmentNumber = await generateAppointmentNumber();
+                                const formattedPhone = whatsappPhone(senderPhone);
+
+                                const appointment = {
+                                    id: crypto.randomUUID(),
+                                    appointmentNumber,
+                                    createdAt: new Date().toISOString(),
+                                    status: 'new',
+                                    patientNumber: null,
+                                    name: session.data.name,
+                                    phone: formattedPhone,
+                                    email: '', 
+                                    date: session.data.date,
+                                    time: session.data.time,
+                                    mode: session.data.mode,
+                                    concern: session.data.concern,
+                                    payment: { status: 'unpaid', amount: null, method: null, paidAt: null }
+                                };
+
+                                await Appointment.create(appointment);
+
+                                // Fire Notifications (Patient confirmation + Clinic alert)
+                                await sendAppointmentRequestReceived(appointment);
+                                await sendClinicNewAppointment(appointment);
+
+                                await sendWhatsAppText(senderPhone, `✅ *Appointment Request Submitted Successfully!*\n\n• *Appointment No:* #${appointment.appointmentNumber}\n• *Date:* ${formatDate(appointment.date)}\n• *Time:* ${appointment.time}\n• *Mode:* ${appointment.mode}\n\nThe clinic will review and confirm your appointment shortly. You will receive a confirmation message with your token number here!`);
+                            } 
+                            else {
+                                // Default greeting if idle
+                                const greeting = `Hello! I am Dr. P. N. Singh Clinic's virtual assistant. How can we assist you today?`;
+                                const menuButtons = ['📅 Book Appointment', '📍 Clinic Location', '💵 Fees & Timings'];
+                                await sendWhatsAppInteractive(senderPhone, greeting, menuButtons);
+                            }
                         }
                     }
                 }
