@@ -30,14 +30,19 @@ async function connectToDatabase() {
     }
 }
 
-// Middleware to connect before API routes
+// ========================================
+// MIDDLEWARE TO CONNECT DB (UPDATED FOR WEBHOOKS)
+// ========================================
 app.use(async (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/webhook')) {
+    if (req.path.startsWith('/api')) {
         try {
             await connectToDatabase();
         } catch (err) {
             return res.status(500).json({ ok: false, message: 'Database connection failed on server.' });
         }
+    } else if (req.path.startsWith('/webhook')) {
+        // Try connecting for webhooks in the background, but don't crash Meta's request if it takes a second
+        connectToDatabase().catch(err => console.error('[Webhook DB Warning]:', err));
     }
     next();
 });
@@ -549,6 +554,9 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
     try {
         const body = req.body;
+        
+        // --- THIS IS THE NEW DEBUG LINE ---
+        console.log('[Webhook] Received raw body from Meta:', JSON.stringify(body, null, 2));
 
         if (body.object === 'whatsapp_business_account') {
             for (const entry of body.entry) {
