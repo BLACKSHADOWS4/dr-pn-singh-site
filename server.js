@@ -548,7 +548,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Vercel requires the app to be exported!
-module.exports = app;const express = require('express');
+module.exports = app;
 const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config();
