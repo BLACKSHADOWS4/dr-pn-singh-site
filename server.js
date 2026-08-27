@@ -5,7 +5,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 
 // ========================================
-// 1. INITIALIZE APP FIRST (CRITICAL FIX)
+// 1. INITIALIZE APP FIRST
 // ========================================
 const app = express();
 
@@ -15,14 +15,10 @@ const app = express();
 const MONGODB_URI = process.env.MONGODB_URI || '';
 
 async function connectToDatabase() {
-    if (mongoose.connection.readyState === 1) {
-        return;
-    }
+    if (mongoose.connection.readyState === 1) return;
     try {
         console.log("Connecting to MongoDB Atlas...");
-        await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000 // Timeout quickly if it fails instead of hanging
-        });
+        await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
         console.log("MongoDB Connected Successfully!");
     } catch (err) {
         console.error("Database connection error:", err);
@@ -30,9 +26,7 @@ async function connectToDatabase() {
     }
 }
 
-// ========================================
-// MIDDLEWARE TO CONNECT DB (UPDATED FOR WEBHOOKS)
-// ========================================
+// Middleware to connect before API routes
 app.use(async (req, res, next) => {
     if (req.path.startsWith('/api')) {
         try {
@@ -41,7 +35,6 @@ app.use(async (req, res, next) => {
             return res.status(500).json({ ok: false, message: 'Database connection failed on server.' });
         }
     } else if (req.path.startsWith('/webhook')) {
-        // Try connecting for webhooks in the background, but don't crash Meta's request if it takes a second
         connectToDatabase().catch(err => console.error('[Webhook DB Warning]:', err));
     }
     next();
@@ -150,7 +143,7 @@ const todayString = () => {
 };
 
 // ========================================
-// NUMBER GENERATORS (DATABASE BASED)
+// NUMBER GENERATORS
 // ========================================
 async function generateAppointmentNumber() {
     let counter = await Counter.findById('global_counters');
@@ -183,19 +176,17 @@ async function generatePatientNumber() {
 }
 
 // ========================================
-// WHATSAPP FUNCTIONS & INTERACTIVE BUTTONS
+// WHATSAPP API FUNCTIONS
 // ========================================
 const whatsappConfigured = () => {
     return WHATSAPP_ENABLED && Boolean(WHATSAPP_ACCESS_TOKEN) && Boolean(WHATSAPP_PHONE_NUMBER_ID);
 };
 
 async function sendWhatsAppTemplate(phone, templateName, parameters) {
-    if (!WHATSAPP_ENABLED) return { ok: false, skipped: true, reason: 'WhatsApp disabled.' };
-    if (!WHATSAPP_ACCESS_TOKEN) return { ok: false, skipped: true, reason: 'WhatsApp access token missing.' };
-    if (!WHATSAPP_PHONE_NUMBER_ID) return { ok: false, skipped: true, reason: 'WhatsApp phone number ID missing.' };
+    if (!WHATSAPP_ENABLED || !WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return { ok: false, skipped: true };
 
     const recipient = whatsappPhone(phone);
-    if (!recipient || recipient.length < 10) return { ok: false, reason: 'Invalid recipient phone number.' };
+    if (!recipient || recipient.length < 10) return { ok: false, reason: 'Invalid phone number.' };
 
     const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
     const body = {
@@ -226,16 +217,44 @@ async function sendWhatsAppTemplate(phone, templateName, parameters) {
             console.error('[WhatsApp] API error:', JSON.stringify(data, null, 2));
             return { ok: false, status: response.status, error: data };
         }
-        console.log(`[WhatsApp] Template "${templateName}" sent to ${recipient}`);
         return { ok: true, data };
     } catch (error) {
-        console.error('[WhatsApp] Network/request error:', error);
+        console.error('[WhatsApp] Network error:', error);
+        return { ok: false, error: error.message };
+    }
+}
+
+async function sendWhatsAppText(phone, messageText) {
+    if (!WHATSAPP_ENABLED || !WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return { ok: false, skipped: true };
+    const recipient = whatsappPhone(phone);
+    if (!recipient) return { ok: false, reason: 'Invalid phone' };
+
+    const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    const body = {
+        messaging_product: 'whatsapp',
+        to: recipient,
+        type: 'text',
+        text: { body: messageText }
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        return { ok: response.ok, data };
+    } catch (error) {
         return { ok: false, error: error.message };
     }
 }
 
 async function sendWhatsAppInteractive(phone, messageBody, buttons) {
-    if (!WHATSAPP_ENABLED) return { ok: false, skipped: true };
+    if (!WHATSAPP_ENABLED || !WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return { ok: false, skipped: true };
     const recipient = whatsappPhone(phone);
     if (!recipient) return { ok: false, reason: 'Invalid phone' };
 
@@ -266,13 +285,8 @@ async function sendWhatsAppInteractive(phone, messageBody, buttons) {
             body: JSON.stringify(body)
         });
         const data = await response.json();
-        if (!response.ok) {
-            console.error('[WhatsApp] Interactive message error:', JSON.stringify(data, null, 2));
-            return { ok: false, error: data };
-        }
-        return { ok: true, data };
+        return { ok: response.ok, data };
     } catch (error) {
-        console.error('[WhatsApp] Interactive network error:', error);
         return { ok: false, error: error.message };
     }
 }
@@ -291,8 +305,9 @@ async function sendClinicNewAppointment(appointment) {
 }
 
 async function sendAppointmentAccepted(appointment) {
+    // Correct Meta template parameter ordering: [Name, PatientNumber, Date, Time, Mode]
     const templateResult = await sendWhatsAppTemplate(appointment.phone, 'appointment_accepted', [
-        appointment.name, formatDate(appointment.date), appointment.time, appointment.mode, appointment.patientNumber
+        appointment.name, appointment.patientNumber, formatDate(appointment.date), appointment.time, appointment.mode
     ]);
 
     const assistantMessage = `Hello Sir/Ma'am, I am your clinic's virtual assistant here to help guide you. Your appointment request has been accepted! Thank you for booking with Dr. P. N. Singh's clinic. Here is your confirmed patient number: *#${appointment.patientNumber}*.`;
@@ -308,7 +323,7 @@ async function sendAppointmentCancelled(appointment) {
     ]);
 
     const cancelMessage = `We are sorry to see your appointment had to be cancelled. If you need assistance or wish to plan for another day, please feel free to reach out to us.`;
-    const buttons = ['📅 Pre-book Tomorrow', '📞 Contact Clinic', '❓ FAQs'];
+    const buttons = ['📅 Book Online', '📞 Contact Clinic', '❓ FAQs'];
 
     await sendWhatsAppInteractive(appointment.phone, cancelMessage, buttons);
     return templateResult;
@@ -389,9 +404,6 @@ app.post('/api/appointments', async (req, res) => {
     const whatsappResult = await sendAppointmentRequestReceived(appointment);
     const clinicWhatsappResult = await sendClinicNewAppointment(appointment);
 
-    if (!whatsappResult.ok) console.error(`[Appointment ${appointment.id}] Patient WhatsApp failed.`);
-    if (!clinicWhatsappResult.ok) console.error(`[Appointment ${appointment.id}] Clinic WhatsApp failed.`);
-
     res.status(201).json({
         ok: true,
         message: 'Your appointment request has been received. The clinic will confirm the appointment.',
@@ -423,7 +435,6 @@ app.post('/api/contact', async (req, res) => {
     };
 
     await Message.create(contactMessage);
-
     res.status(201).json({ ok: true, message: 'Your message has been received. The clinic will get back to you.' });
 });
 
@@ -446,7 +457,6 @@ app.get('/api/admin/appointments', admin, async (req, res) => {
 
 app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
     const appointment = await Appointment.findOne({ id: req.params.id });
-
     if (!appointment) return res.status(404).json({ ok: false, message: 'Appointment not found.' });
 
     const status = clean(req.body?.status, 30);
@@ -454,9 +464,8 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
         return res.status(400).json({ ok: false, message: 'Invalid appointment status.' });
     }
 
-    const oldStatus = appointment.status;
-    if (oldStatus === status) {
-        return res.json({ ok: true, appointment, message: 'Appointment status is already set to this value.' });
+    if (appointment.status === status) {
+        return res.json({ ok: true, appointment, message: 'Status already set.' });
     }
 
     if (status === 'accepted') {
@@ -466,11 +475,9 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
         appointment.status = 'accepted';
         appointment.updatedAt = new Date().toISOString();
         appointment.payment = appointment.payment || { status: 'unpaid', amount: null, method: null, paidAt: null };
-        
         await appointment.save();
 
         const whatsappResult = await sendAppointmentAccepted(appointment);
-        if (!whatsappResult.ok) console.error(`[Appointment ${appointment.id}] Accepted WhatsApp failed.`);
         return res.json({ ok: true, appointment, whatsapp: whatsappResult.ok ? 'sent' : 'failed' });
     }
 
@@ -480,14 +487,13 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
         await appointment.save();
 
         const whatsappResult = await sendAppointmentCancelled(appointment);
-        if (!whatsappResult.ok) console.error(`[Appointment ${appointment.id}] Cancelled WhatsApp failed.`);
         return res.json({ ok: true, appointment, whatsapp: whatsappResult.ok ? 'sent' : 'failed' });
     }
 
     if (status === 'completed') {
-        if (!appointment.patientNumber) return res.status(400).json({ ok: false, message: 'Patient number has not been assigned.' });
+        if (!appointment.patientNumber) return res.status(400).json({ ok: false, message: 'Patient number missing.' });
         if (!appointment.payment || appointment.payment.status !== 'paid') {
-            return res.status(400).json({ ok: false, message: 'Payment must be marked as paid before completing the appointment.' });
+            return res.status(400).json({ ok: false, message: 'Payment must be marked as paid.' });
         }
         appointment.status = 'completed';
         appointment.updatedAt = new Date().toISOString();
@@ -505,19 +511,17 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
 
 app.patch('/api/admin/appointments/:id/payment', admin, async (req, res) => {
     const appointment = await Appointment.findOne({ id: req.params.id });
-
     if (!appointment) return res.status(404).json({ ok: false, message: 'Appointment not found.' });
-    if (appointment.status !== 'accepted') return res.status(400).json({ ok: false, message: 'Payment can only be recorded for an accepted appointment.' });
+    if (appointment.status !== 'accepted') return res.status(400).json({ ok: false, message: 'Appointment must be accepted.' });
 
     const amount = Number(req.body?.amount);
     const method = clean(req.body?.method, 20).toLowerCase();
 
-    if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ ok: false, message: 'Please enter a valid payment amount.' });
-    if (!['cash', 'upi'].includes(method)) return res.status(400).json({ ok: false, message: 'Please select Cash or UPI.' });
+    if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ ok: false, message: 'Invalid payment amount.' });
+    if (!['cash', 'upi'].includes(method)) return res.status(400).json({ ok: false, message: 'Select Cash or UPI.' });
 
-    appointment.payment = { status: 'paid', amount: amount, method: method, paidAt: new Date().toISOString() };
+    appointment.payment = { status: 'paid', amount, method, paidAt: new Date().toISOString() };
     appointment.updatedAt = new Date().toISOString();
-    
     await appointment.save();
 
     res.json({ ok: true, appointment, message: 'Payment marked as paid.' });
@@ -533,7 +537,7 @@ app.get('/api/admin/messages', admin, async (req, res) => {
 });
 
 // ========================================
-// WHATSAPP WEBHOOK ROUTES (JOURNEY 2)
+// WHATSAPP WEBHOOK ROUTING & ACTIONS
 // ========================================
 app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
@@ -542,11 +546,10 @@ app.get('/webhook', (req, res) => {
 
     if (mode && token) {
         if (mode === 'subscribe' && token === WHATSAPP_VERIFY_TOKEN) {
-            console.log('[Webhook] WEBHOOK_VERIFIED');
+            console.log('[Webhook] Verified successfully!');
             return res.status(200).send(challenge);
-        } else {
-            return res.sendStatus(403);
         }
+        return res.sendStatus(403);
     }
     return res.sendStatus(400);
 });
@@ -554,22 +557,46 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
     try {
         const body = req.body;
-        
-        // --- THIS IS THE NEW DEBUG LINE ---
-        console.log('[Webhook] Received raw body from Meta:', JSON.stringify(body, null, 2));
+        console.log('[Webhook] Received:', JSON.stringify(body, null, 2));
 
         if (body.object === 'whatsapp_business_account') {
-            for (const entry of body.entry) {
-                for (const change of entry.changes) {
+            for (const entry of body.entry || []) {
+                for (const change of entry.changes || []) {
                     const value = change.value;
                     if (value && value.messages && value.messages.length > 0) {
                         const message = value.messages[0];
                         const senderPhone = message.from;
 
-                        const directMessage = `Hello Sir/Ma'am, I am your clinic's virtual assistant here to help you with inquiries, booking, and clinic information. How can we help you today?`;
-                        const directButtons = ['📅 Book Appointment', '📍 Clinic Location', '💵 Fees & Timings'];
+                        // 1. Handle interactive button clicks
+                        if (message.type === 'interactive' && message.interactive?.button_reply) {
+                            const buttonTitle = message.interactive.button_reply.title || '';
 
-                        await sendWhatsAppInteractive(senderPhone, directMessage, directButtons);
+                            if (buttonTitle.includes('Location')) {
+                                const locationText = `📍 *Clinic Location*\n\nDr. P. N. Singh Clinic\nC-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh.\n\n🗺️ *Google Maps:* https://maps.google.com/?q=Bilandpur+Gorakhpur`;
+                                await sendWhatsAppText(senderPhone, locationText);
+                            } else if (buttonTitle.includes('FAQs')) {
+                                const faqText = `❓ *Frequently Asked Questions*\n\n• *Consultation Fee:* ₹400\n• *Consultation Modes:* In-Clinic & Teleconsultation\n• *Timings:* Mon - Sat (10:00 AM - 07:00 PM)\n• *Reports:* Please carry any previous prescriptions or medical test records.`;
+                                await sendWhatsAppText(senderPhone, faqText);
+                            } else if (buttonTitle.includes('Details') || buttonTitle.includes('View')) {
+                                const detailsText = `📋 *Appointment Guidance*\n\n• Please arrive 10 minutes prior to your selected consultation time.\n• Carry your token/patient number to show at the reception desk.\n• In case of rescheduling, please reach out directly.`;
+                                await sendWhatsAppText(senderPhone, detailsText);
+                            } else if (buttonTitle.includes('Fees') || buttonTitle.includes('Timings')) {
+                                const feeText = `💵 *Fees & Consultation Timings*\n\n• *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n• *Fee:* ₹400 per session\n• *Clinic Hours:* Monday to Saturday, 10:00 AM – 7:00 PM (Closed Sundays).`;
+                                await sendWhatsAppText(senderPhone, feeText);
+                            } else if (buttonTitle.includes('Book')) {
+                                const bookText = `📅 *Online Appointment Booking*\n\nYou can select your preferred slot and consultation mode directly on our official portal:\n👉 https://drpnsingh.vercel.app/`;
+                                await sendWhatsAppText(senderPhone, bookText);
+                            } else if (buttonTitle.includes('Contact')) {
+                                const contactText = `📞 *Clinic Contact*\n\n• Clinic Desk: Available during OPD hours\n• Address: Bilandpur New Colony, Gorakhpur\n• Online Portal: https://drpnsingh.vercel.app/`;
+                                await sendWhatsAppText(senderPhone, contactText);
+                            }
+                        }
+                        // 2. Handle standard incoming text messages ("Hii", "Hello", etc.)
+                        else if (message.type === 'text') {
+                            const greeting = `Hello! I am Dr. P. N. Singh Clinic's virtual assistant. How can we assist you today?`;
+                            const menuButtons = ['📅 Book Appointment', '📍 Clinic Location', '💵 Fees & Timings'];
+                            await sendWhatsAppInteractive(senderPhone, greeting, menuButtons);
+                        }
                     }
                 }
             }
@@ -577,26 +604,22 @@ app.post('/webhook', async (req, res) => {
         }
         return res.sendStatus(404);
     } catch (error) {
-        console.error('[Webhook] Error handling incoming message:', error);
+        console.error('[Webhook Error]:', error);
         return res.sendStatus(500);
     }
 });
 
 // ========================================
-// FALLBACK
+// FALLBACK & SERVER START
 // ========================================
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ========================================
-// START SERVER (UPDATED FOR VERCEL)
-// ========================================
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => {
-        console.log(`Dr. P. N. Singh website running locally at http://localhost:${PORT}`);
+        console.log(`Server running locally at http://localhost:${PORT}`);
     });
 }
 
-// Vercel requires the app to be exported!
 module.exports = app;
