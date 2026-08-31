@@ -48,9 +48,11 @@ const ADMIN_KEY = process.env.ADMIN_KEY || 'change-this-admin-key';
 const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
 const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION || 'v25.0';
-const WHATSAPP_ENABLED = String(process.env.WHATSAPP_ENABLED || 'true').toLowerCase() === 'true';
+const WHATSAPP_ENABLED = String(process.env.WHATSAPP_ENABLED || 'false').toLowerCase() === 'true';
 const CLINIC_WHATSAPP_NUMBER = process.env.CLINIC_WHATSAPP_NUMBER || '';
 const CLINIC_UPI_ID = process.env.CLINIC_UPI_ID || '';
+const CLINIC_PHONE = process.env.CLINIC_PHONE || '';
+const CLINIC_EMAIL = process.env.CLINIC_EMAIL || '';
 const CLINIC_PAYMENT_NAME = process.env.CLINIC_PAYMENT_NAME || 'Dr. P. N. Singh';
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'clinic_verify_token';
 
@@ -84,11 +86,15 @@ const appointmentSchema = new mongoose.Schema({
 });
 
 const counterSchema = new mongoose.Schema({
-    _id: { type: String, default: 'global_counters' },
-    nextAppointmentNumber: { type: Number, default: 1 },
-    patientDate: { type: String, default: '' },
-    nextPatientNumber: { type: Number, default: 1 }
-});
+    _id: { type: String, required: true },
+    nextAppointmentNumber: { type: Number, default: 0 }
+}, { versionKey: false });
+
+const patientCounterSchema = new mongoose.Schema({
+    _id: { type: String, required: true },
+    date: { type: String, required: true, index: true },
+    nextPatientNumber: { type: Number, default: 0 }
+}, { versionKey: false });
 
 const messageSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
@@ -113,10 +119,11 @@ const sessionSchema = new mongoose.Schema({
     updatedAt: { type: String, default: () => new Date().toISOString() }
 });
 
-const Appointment = mongoose.model('Appointment', appointmentSchema);
-const Counter = mongoose.model('Counter', counterSchema);
-const Message = mongoose.model('Message', messageSchema);
-const Session = mongoose.model('Session', sessionSchema);
+const Appointment = mongoose.models.Appointment || mongoose.model('Appointment', appointmentSchema);
+const Counter = mongoose.models.Counter || mongoose.model('Counter', counterSchema);
+const PatientCounter = mongoose.models.PatientCounter || mongoose.model('PatientCounter', patientCounterSchema);
+const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
+const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
 
 // ========================================
 // MIDDLEWARE
@@ -140,52 +147,71 @@ const whatsappPhone = value => {
     if (cleaned.length === 12 && cleaned.startsWith('91')) return cleaned;
     return cleaned;
 };
-const formatDate = value => {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-    if (!match) return value;
-    const [, year, month, day] = match;
-    const date = new Date(Number(year), Number(month) - 1, Number(day));
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
-};
+function indiaDateParts(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(date);
+    const result = {};
+    for (const part of parts) {
+        if (part.type !== 'literal') result[part.type] = part.value;
+    }
+    return result;
+}
+
 const todayString = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const p = indiaDateParts();
+    return `${p.year}-${p.month}-${p.day}`;
+};
+
+const isValidISODate = value => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year &&
+        date.getUTCMonth() === month - 1 &&
+        date.getUTCDate() === day;
+};
+
+const formatDate = value => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    if (!match) return String(value || '');
+    const [, year, month, day] = match;
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12));
+    if (Number.isNaN(date.getTime())) return String(value || '');
+    return date.toLocaleDateString('en-IN', {
+        day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata'
+    });
 };
 
 // ========================================
 // NUMBER GENERATORS
 // ========================================
 async function generateAppointmentNumber() {
-    let counter = await Counter.findById('global_counters');
-    if (!counter) {
-        counter = await Counter.create({ _id: 'global_counters', nextAppointmentNumber: 1 });
-    }
-    const num = counter.nextAppointmentNumber || 1;
-    counter.nextAppointmentNumber = num + 1;
-    await counter.save();
+    // Fresh sequence: the first new appointment is 0000001.
+    // MongoDB performs the increment atomically, so concurrent bookings cannot receive the same ID.
+    const counter = await Counter.findOneAndUpdate(
+        { _id: 'appointment_sequence' },
+        { $inc: { nextAppointmentNumber: 1 } },
+        { upsert: true, returnDocument: 'after' }
+    ).lean();
+
+    const num = Number(counter?.nextAppointmentNumber);
+    if (!Number.isInteger(num) || num < 1) throw new Error('Appointment number generation failed.');
     return String(num).padStart(7, '0');
 }
 
 async function generatePatientNumber() {
-    let counter = await Counter.findById('global_counters');
-    const today = todayString();
-    
-    if (!counter) {
-        counter = await Counter.create({ _id: 'global_counters', patientDate: today, nextPatientNumber: 1 });
-    }
-    
-    if (counter.patientDate !== today) {
-        counter.patientDate = today;
-        counter.nextPatientNumber = 1;
-    }
-    
-    const num = counter.nextPatientNumber || 1;
-    counter.nextPatientNumber = num + 1;
-    await counter.save();
+    // One counter document per IST calendar day. $inc is atomic and also creates the field on first use.
+    const date = todayString();
+    const counter = await PatientCounter.findOneAndUpdate(
+        { _id: `patient_${date}` },
+        { $setOnInsert: { date }, $inc: { nextPatientNumber: 1 } },
+        { upsert: true, returnDocument: 'after' }
+    ).lean();
+
+    const num = Number(counter?.nextPatientNumber);
+    if (!Number.isInteger(num) || num < 1) throw new Error('Patient number generation failed.');
     return String(num).padStart(2, '0');
 }
 
@@ -356,7 +382,7 @@ app.get('/api/clinic', (req, res) => {
     res.json({
         doctor: 'Dr. P. N. Singh', specialty: 'Neuropsychiatrist', tagline: 'Better Mental Health, Better Quality of Life.',
         consultationFee: 400, address: 'C-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh',
-        phone: '+91 00000 00000', email: 'clinic@example.com', whatsapp: '910000000000',
+        phone: CLINIC_PHONE, email: CLINIC_EMAIL, whatsapp: CLINIC_WHATSAPP_NUMBER,
         upiId: CLINIC_UPI_ID, paymentName: CLINIC_PAYMENT_NAME
     });
 });
@@ -384,16 +410,10 @@ app.post('/api/appointments', async (req, res) => {
         date = `${y}-${m}-${d}`;
     }
 
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!isValidISODate(date)) {
         return res.status(400).json({ ok: false, message: 'Please choose a valid date.' });
     }
-    const requestedDate = new Date(`${date}T00:00:00`);
-    if (Number.isNaN(requestedDate.getTime())) {
-        return res.status(400).json({ ok: false, message: 'Please choose a valid date.' });
-    }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (requestedDate < today) {
+    if (date < todayString()) {
         return res.status(400).json({ ok: false, message: 'Please choose today or a future date.' });
     }
     if (!email(mail)) {
@@ -482,16 +502,32 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
     }
 
     if (status === 'accepted') {
-        if (!appointment.patientNumber) {
-            appointment.patientNumber = await generatePatientNumber();
+        if (appointment.status !== 'new') {
+            return res.status(400).json({ ok: false, message: 'Only a new appointment can be accepted.' });
         }
-        appointment.status = 'accepted';
-        appointment.updatedAt = new Date().toISOString();
-        appointment.payment = appointment.payment || { status: 'unpaid', amount: null, method: null, paidAt: null };
-        await appointment.save();
 
-        const whatsappResult = await sendAppointmentAccepted(appointment);
-        return res.json({ ok: true, appointment, whatsapp: whatsappResult.ok ? 'sent' : 'failed' });
+        // Allocate a patient number atomically, then claim this appointment atomically.
+        // The conditional update prevents two receptionist clicks from accepting the same request twice.
+        const patientNumber = appointment.patientNumber || await generatePatientNumber();
+        const updated = await Appointment.findOneAndUpdate(
+            { id: appointment.id, status: 'new', patientNumber: null },
+            {
+                $set: {
+                    patientNumber,
+                    status: 'accepted',
+                    updatedAt: new Date().toISOString(),
+                    payment: appointment.payment || { status: 'unpaid', amount: null, method: null, paidAt: null }
+                }
+            },
+            { returnDocument: 'after' }
+        );
+
+        if (!updated) {
+            return res.status(409).json({ ok: false, message: 'This appointment was already updated. Please refresh the dashboard.' });
+        }
+
+        const whatsappResult = await sendAppointmentAccepted(updated);
+        return res.json({ ok: true, appointment: updated, whatsapp: whatsappResult.ok ? 'sent' : 'failed' });
     }
 
     if (status === 'cancelled') {
@@ -691,6 +727,18 @@ app.post('/webhook', async (req, res) => {
         console.error('[Webhook Error]:', error);
         return res.sendStatus(500);
     }
+});
+
+// ========================================
+// API ERROR HANDLER
+// ========================================
+app.use((error, req, res, next) => {
+    console.error('[Server Error]', error);
+    if (res.headersSent) return next(error);
+    if (req.path.startsWith('/api') || req.path.startsWith('/webhook')) {
+        return res.status(500).json({ ok: false, message: 'An unexpected server error occurred.' });
+    }
+    return res.status(500).send('Internal Server Error');
 });
 
 // ========================================

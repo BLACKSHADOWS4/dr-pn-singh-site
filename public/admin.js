@@ -4,7 +4,7 @@
 	const state = { appointments: [], selected: null };
 	const $ = selector => document.querySelector(selector);
 	const adminKey = () => sessionStorage.getItem('clinicAdminKey') || '';
-	const today = () => new Date().toISOString().slice(0, 10);
+	const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 	async function request(url, options = {}) {
 		const response = await fetch(url, { cache: 'no-store', ...options, headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey(), ...(options.headers || {}) } });
@@ -17,7 +17,7 @@
 	function escapeHtml(value) {
 		return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 	}
-	function formatDate(date) { if (!date) return '—'; return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
+	function formatDate(date) { if (!date) return '—'; return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }); }
 	function formatStatus(appointment) { return appointment.payment?.status === 'paid' && appointment.status === 'accepted' ? 'paid' : appointment.status; }
 	function statusBadge(appointment) { const status = formatStatus(appointment); return `<span class="status status-${escapeHtml(status)}">${escapeHtml(status)}</span>`; }
 

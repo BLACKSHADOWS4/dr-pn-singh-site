@@ -1,5 +1,10 @@
 node_modules/
 .env
+.env.*
+!.env.example
+atlas-credentials.env
+.git/
 data/appointments.json
 data/messages.json
 npm-debug.log*
+.vercel/
