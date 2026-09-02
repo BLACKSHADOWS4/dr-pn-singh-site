@@ -164,12 +164,24 @@
     }
 
     function setLanguage(lang) {
+        sessionStorage.setItem('site_lang', lang);
         document.getElementById('langModal').style.display = 'none'; 
         if (lang === 'hi') {
             document.body.classList.add('hindi-mode');
             applyTranslation(document.body);
         }
     }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedLang = sessionStorage.getItem('site_lang');
+        if (savedLang) {
+            document.getElementById('langModal').style.display = 'none'; 
+            if (savedLang === 'hi') {
+                document.body.classList.add('hindi-mode');
+                applyTranslation(document.body);
+            }
+        }
+    });
 </script>
 </body>
 </html>

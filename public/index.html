@@ -794,7 +794,7 @@
 <script src="/app.js"></script>
 
 <!-- ================================
-     LANGUAGE TRANSLATION SCRIPT
+     LANGUAGE TRANSLATION SCRIPT (WITH SESSION MEMORY)
 ================================ -->
 <script>
     const hiDict = {
@@ -825,6 +825,7 @@
         "Confidential & Ethical Care": "गोपनीय और नैतिक देखभाल",
         "About the doctor": "डॉक्टर के बारे में",
         "About Dr. P. N. Singh": "डॉ. पी. एन. सिंह के बारे में",
+        "A detailed profile of Dr. P. N. Singh, professional experience, qualifications, approach to care and other information will be available here soon.": "डॉ. पी. एन. सिंह की विस्तृत प्रोफ़ाइल, पेशेवर अनुभव, योग्यताएं और अन्य जानकारी जल्द ही यहाँ उपलब्ध होगी।",
         "Dr. P. N. Singh is a Neuropsychiatrist focused on personalised, evidence-based care for mental health, behavioural and neuropsychiatric concerns.": "डॉ. पी. एन. सिंह एक न्यूरोसाइकियाट्रिस्ट हैं जो मानसिक स्वास्थ्य, व्यवहारिक और न्यूरोसाइकियाट्रिक समस्याओं के लिए व्यक्तिगत और साक्ष्य-आधारित देखभाल प्रदान करते हैं।",
         "Know More About Me →": "मेरे बारे में और जानें →",
         "Care approach": "देखभाल का दृष्टिकोण",
@@ -840,10 +841,12 @@
         "Safe & Confidential": "सुरक्षित और गोपनीय",
         "A respectful environment for sensitive conversations.": "संवेदनशील बातचीत के लिए एक सम्मानजनक और सुरक्षित वातावरण।",
         "Holistic Well-being": "समग्र स्वास्थ्य",
-        "Attention to मानसिक, भावनात्मक और कार्यात्मक स्वास्थ्य पर पूरा ध्यान।": "मानसिक, भावनात्मक और कार्यात्मक स्वास्थ्य पर पूरा ध्यान।",
+        "Attention to mental, emotional and functional well-being.": "मानसिक, भावनात्मक और कार्यात्मक स्वास्थ्य पर पूरा ध्यान।",
         "Support for different needs": "विभिन्न आवश्यकताओं के लिए समर्थन",
         "Conditions We Treat": "बीमारियाँ जिनका हम इलाज करते हैं",
         "Explore common areas of psychiatric and neuropsychiatric care.": "मनोरोग और न्यूरोसाइकियाट्रिक देखभाल के सामान्य क्षेत्रों के बारे में जानें।",
+        "We are preparing a detailed page covering additional psychiatric and neuropsychiatric conditions and areas of consultation.": "हम अतिरिक्त मनोरोग और न्यूरोसाइकियाट्रिक बीमारियों और परामर्श के क्षेत्रों को कवर करने वाला एक विस्तृत पेज तैयार कर रहे हैं।",
+        "Areas of care": "देखभाल के क्षेत्र",
         "◉": "◉", "◌": "◌", "◎": "◎", "◇": "◇", "♧": "♧", "♙": "♙", "♡": "♡", "→": "→",
         "Depression": "अवसाद (Depression)",
         "Low mood, loss of interest and related difficulties.": "लगातार उदासी, किसी काम में मन न लगना और अन्य संबंधित कठिनाइयाँ।",
@@ -862,6 +865,8 @@
         "More Conditions": "अन्य बीमारियाँ",
         "Explore additional areas of care and consultation.": "देखभाल और परामर्श के अतिरिक्त क्षेत्रों के बारे में जानें।",
         "Simple appointment flow": "सरल अपॉइंटमेंट प्रक्रिया",
+        "Get in touch": "संपर्क में रहें",
+        "This page will contain additional ways to connect with the clinic, community initiatives, programmes and other contact information.": "इस पेज पर क्लीनिक से जुड़ने के अतिरिक्त तरीके, सामुदायिक पहल और अन्य संपर्क जानकारी शामिल होगी।",
         "Book an Appointment": "अपॉइंटमेंट बुक करें",
         "Full name": "पूरा नाम",
         "Phone": "फ़ोन नंबर",
@@ -908,43 +913,53 @@
         "Optional": "वैकल्पिक (Optional)",
         "Request received": "अनुरोध प्राप्त हुआ",
         "Your appointment request has been received.": "आपका अपॉइंटमेंट अनुरोध हमें प्राप्त हो गया है।",
-        "Done": "ठीक है"
+        "Done": "ठीक है",
+        "Coming Soon": "जल्द आ रहा है",
+        "We are preparing this page.": "हम इस पेज को तैयार कर रहे हैं।",
+        "← Back to Home": "← होम पर वापस जाएं",
+        "More information will be added here soon.": "अधिक जानकारी जल्द ही यहाँ जोड़ी जाएगी।",
+        "More contact information will be added here soon.": "अधिक संपर्क जानकारी जल्द ही यहाँ जोड़ी जाएगी।"
     };
 
     function applyTranslation(node) {
         if (node.nodeType === 3) { 
             let originalText = node.nodeValue;
             let textToMatch = originalText.replace(/\s+/g, ' ').trim();
-            
             if (textToMatch && hiDict[textToMatch]) {
                 let leadingSpace = originalText.match(/^\s*/)[0];
                 let trailingSpace = originalText.match(/\s*$/)[0];
                 node.nodeValue = leadingSpace + hiDict[textToMatch] + trailingSpace;
             }
         } else if (node.nodeType === 1 && node.nodeName !== 'SCRIPT' && node.nodeName !== 'STYLE') {
-            for (let i = 0; i < node.childNodes.length; i++) {
-                applyTranslation(node.childNodes[i]);
-            }
+            for (let i = 0; i < node.childNodes.length; i++) applyTranslation(node.childNodes[i]);
             if (node.placeholder) {
                 let phToMatch = node.placeholder.replace(/\s+/g, ' ').trim();
-                if (hiDict[phToMatch]) {
-                    node.placeholder = hiDict[phToMatch];
-                }
+                if (hiDict[phToMatch]) node.placeholder = hiDict[phToMatch];
             }
         }
     }
 
-    // Modal popup har baar aane ke liye localStorage hata diya gaya hai
     function setLanguage(lang) {
+        // Session storage me choice save karna (sirf current tab/session ke liye)
+        sessionStorage.setItem('site_lang', lang);
         document.getElementById('langModal').style.display = 'none'; 
-        
         if (lang === 'hi') {
-            // Hindi text overlapping fix apply karna
             document.body.classList.add('hindi-mode');
             applyTranslation(document.body);
         }
-        // Agar English choose kiya toh bina kisi change ke page waise hi rahega
     }
+
+    // Jab page reload ho, toh check kare ki session me memory save hai ya nahi
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedLang = sessionStorage.getItem('site_lang');
+        if (savedLang) {
+            document.getElementById('langModal').style.display = 'none'; 
+            if (savedLang === 'hi') {
+                document.body.classList.add('hindi-mode');
+                applyTranslation(document.body);
+            }
+        }
+    });
 </script>
 
 </body>
