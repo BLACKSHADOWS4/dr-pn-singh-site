@@ -24,6 +24,13 @@
 >
 
 <link rel="stylesheet" href="/styles.css">
+
+<!-- Fix for Hindi overlapping -->
+<style>
+    .hindi-mode, .hindi-mode * {
+        letter-spacing: normal !important;
+    }
+</style>
 </head>
 
 <body>
@@ -138,7 +145,7 @@
             </a>
             <a
                 class="btn btn-outline"
-                href="https://wa.me/919876766533"
+                href="https://wa.me/915513141853"
                 target="_blank"
                 rel="noopener"
             >
@@ -546,16 +553,16 @@
         <div class="contact-grid">
             <a
                 class="contact-box"
-                href="tel:+919876766533"
+                href="tel:+915513141853"
             >
                 <span class="contact-icon"><i class="fa-solid fa-phone"></i></span>
                 <span class="contact-label">MOBILE</span>
-                <strong>+91 98767 66533</strong>
+                <strong>+91 5513141853</strong>
             </a>
 
             <a
                 class="contact-box"
-                href="https://wa.me/919876766533"
+                href="https://wa.me/915513141853"
                 target="_blank"
                 rel="noopener"
             >
@@ -664,7 +671,7 @@
             <p>For appointments and clinic information.</p>
             <a
                 class="footer-whatsapp"
-                href="https://wa.me/919876766533"
+                href="https://wa.me/915513141853"
                 target="_blank"
                 rel="noopener"
             >
@@ -692,7 +699,7 @@
         <small>Book</small>
     </a>
     <a
-        href="https://wa.me/919876766533"
+        href="https://wa.me/915513141853"
         target="_blank"
         rel="noopener"
         aria-label="Chat on WhatsApp"
@@ -787,21 +794,8 @@
 <script src="/app.js"></script>
 
 <!-- ================================
-     LANGUAGE TRANSLATION SCRIPT (PERFECTED SPACING & POPUP)
+     LANGUAGE TRANSLATION SCRIPT
 ================================ -->
-<style>
-    /* Hindi Text Spacing & Overlap Fixes */
-    body.hi-mode * {
-        letter-spacing: normal !important;
-    }
-    body.hi-mode h1, body.hi-mode h2, body.hi-mode h3 {
-        line-height: 1.4 !important;
-    }
-    body.hi-mode p, body.hi-mode small, body.hi-mode span, body.hi-mode a, body.hi-mode div, body.hi-mode strong {
-        line-height: 1.6 !important;
-    }
-</style>
-
 <script>
     const hiDict = {
         "Prithvi Nath Neuropsychiatrist Hospital": "पृथ्वी नाथ न्यूरोसाइकियाट्रिस्ट अस्पताल",
@@ -940,39 +934,17 @@
         }
     }
 
+    // Modal popup har baar aane ke liye localStorage hata diya gaya hai
     function setLanguage(lang) {
-        // CHANGED: localStorage की जगह sessionStorage का उपयोग
-        sessionStorage.setItem('site_lang', lang);
         document.getElementById('langModal').style.display = 'none'; 
         
         if (lang === 'hi') {
-            window.translatedToHi = true;
-            document.body.classList.add('hi-mode'); // हिंदी वाली स्पेसिंग अप्लाई करें
+            // Hindi text overlapping fix apply karna
+            document.body.classList.add('hindi-mode');
             applyTranslation(document.body);
-        } else {
-            document.body.classList.remove('hi-mode');
-            if (window.translatedToHi) {
-                location.reload();
-            }
         }
+        // Agar English choose kiya toh bina kisi change ke page waise hi rahega
     }
-
-    window.addEventListener('DOMContentLoaded', () => {
-        // CHANGED: सिर्फ sessionStorage चेक करेगा
-        const savedLang = sessionStorage.getItem('site_lang');
-        if (savedLang) {
-            document.getElementById('langModal').style.display = 'none'; 
-            if (savedLang === 'hi') {
-                window.translatedToHi = true;
-                document.body.classList.add('hi-mode'); // हिंदी वाली स्पेसिंग अप्लाई करें
-                applyTranslation(document.body);
-            }
-        } else {
-            // अगर भाषा सेट नहीं है, तो पॉप-अप दिखाएं (हर नए टैब/विज़िट पर)
-            const modal = document.getElementById('langModal');
-            if(modal) modal.style.display = 'flex';
-        }
-    });
 </script>
 
 </body>
