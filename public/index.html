@@ -787,8 +787,21 @@
 <script src="/app.js"></script>
 
 <!-- ================================
-     LANGUAGE TRANSLATION SCRIPT (PERFECTED)
+     LANGUAGE TRANSLATION SCRIPT (PERFECTED SPACING & POPUP)
 ================================ -->
+<style>
+    /* Hindi Text Spacing & Overlap Fixes */
+    body.hi-mode * {
+        letter-spacing: normal !important;
+    }
+    body.hi-mode h1, body.hi-mode h2, body.hi-mode h3 {
+        line-height: 1.4 !important;
+    }
+    body.hi-mode p, body.hi-mode small, body.hi-mode span, body.hi-mode a, body.hi-mode div, body.hi-mode strong {
+        line-height: 1.6 !important;
+    }
+</style>
+
 <script>
     const hiDict = {
         "Prithvi Nath Neuropsychiatrist Hospital": "पृथ्वी नाथ न्यूरोसाइकियाट्रिस्ट अस्पताल",
@@ -928,13 +941,16 @@
     }
 
     function setLanguage(lang) {
-        localStorage.setItem('site_lang', lang);
+        // CHANGED: localStorage की जगह sessionStorage का उपयोग
+        sessionStorage.setItem('site_lang', lang);
         document.getElementById('langModal').style.display = 'none'; 
         
         if (lang === 'hi') {
             window.translatedToHi = true;
+            document.body.classList.add('hi-mode'); // हिंदी वाली स्पेसिंग अप्लाई करें
             applyTranslation(document.body);
         } else {
+            document.body.classList.remove('hi-mode');
             if (window.translatedToHi) {
                 location.reload();
             }
@@ -942,13 +958,19 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-        const savedLang = localStorage.getItem('site_lang');
+        // CHANGED: सिर्फ sessionStorage चेक करेगा
+        const savedLang = sessionStorage.getItem('site_lang');
         if (savedLang) {
             document.getElementById('langModal').style.display = 'none'; 
             if (savedLang === 'hi') {
                 window.translatedToHi = true;
+                document.body.classList.add('hi-mode'); // हिंदी वाली स्पेसिंग अप्लाई करें
                 applyTranslation(document.body);
             }
+        } else {
+            // अगर भाषा सेट नहीं है, तो पॉप-अप दिखाएं (हर नए टैब/विज़िट पर)
+            const modal = document.getElementById('langModal');
+            if(modal) modal.style.display = 'flex';
         }
     });
 </script>
