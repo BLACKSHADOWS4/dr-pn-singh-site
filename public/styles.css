@@ -919,6 +919,16 @@ textarea{
    FOOTER
 ========================= */
 
+.footer-logo {
+    width: 140px;
+    height: auto;
+    display: block;
+    padding: 8px;
+    background: #ffffff;
+    border-radius: 6px;
+    object-fit: contain;
+}
+
 .site-footer{
     background:var(--navy);
     color:#fff;
