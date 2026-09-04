@@ -1721,4 +1721,13 @@ textarea{
     .simple-page-content h1{
         font-size:36px
     }
+
+    /* =========================
+   HEADER HEIGHT FIX (HIDE SUBTITLE ON MOBILE/TABLET)
+========================= */
+@media (max-width: 1050px) {
+    .site-header .brand small {
+        display: none !important;
+    }
+    
 }
