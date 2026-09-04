@@ -1723,11 +1723,33 @@ textarea{
     }
 
     /* =========================
-   HEADER HEIGHT FIX (HIDE SUBTITLE ON MOBILE/TABLET)
-========================= */
+      HEADER HEIGHT FIX (HIDE SUBTITLE ON MOBILE/TABLET)
+    ========================= */
 @media (max-width: 1050px) {
     .site-header .brand small {
         display: none !important;
     }
-    
+
+    /* =========================
+       MOBILE HEADER COMPACT FIX
+    ========================= */
+@media (max-width: 900px) {
+    /* Reduce the empty padding at the top and bottom of the white header box */
+    .site-header {
+        padding: 8px 16px !important;
+        min-height: auto;
+    }
+
+    /* Shrink the English text slightly and pull the lines much closer together */
+    .brand strong {
+        font-size: 14.5px;
+        line-height: 1.15; /* This kills the extra gap between wrapped words */
+    }
+
+    /* Shrink the logo slightly so it fits the new compact height perfectly */
+    .brand img {
+        width: 36px !important;
+        height: 36px !important;
+    }
+}
 }
