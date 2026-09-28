@@ -106,6 +106,7 @@ const messageSchema = new mongoose.Schema({
     message: String
 });
 
+// UPGRADED SESSION SCHEMA: Added Language tracking and 5-minute Auto-Expiry TTL Index
 const sessionSchema = new mongoose.Schema({
     phone: { type: String, required: true, unique: true },
     step: { type: String, default: 'idle' },
@@ -114,10 +115,13 @@ const sessionSchema = new mongoose.Schema({
         date: String,
         time: String,
         mode: String,
-        concern: String
-    },
-    updatedAt: { type: String, default: () => new Date().toISOString() }
-});
+        concern: String,
+        lang: { type: String, default: 'en' }
+    }
+}, { timestamps: true });
+
+// Tells MongoDB to automatically delete the session 300 seconds (5 mins) after last update
+sessionSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 300 });
 
 const Appointment = mongoose.models.Appointment || mongoose.model('Appointment', appointmentSchema);
 const Counter = mongoose.models.Counter || mongoose.model('Counter', counterSchema);
@@ -188,8 +192,6 @@ const formatDate = value => {
 // NUMBER GENERATORS
 // ========================================
 async function generateAppointmentNumber() {
-    // Fresh sequence: the first new appointment is 0000001.
-    // MongoDB performs the increment atomically, so concurrent bookings cannot receive the same ID.
     const counter = await Counter.findOneAndUpdate(
         { _id: 'appointment_sequence' },
         { $inc: { nextAppointmentNumber: 1 } },
@@ -202,11 +204,10 @@ async function generateAppointmentNumber() {
 }
 
 async function generatePatientNumber() {
-    // One counter document per IST calendar day. $inc is atomic and also creates the field on first use.
     const date = todayString();
     const counter = await PatientCounter.findOneAndUpdate(
         { _id: `patient_${date}` },
-        { $setOnInsert: { date }, $inc: { nextPatientNumber: 1 } },
+        { $setOnInsert: { date },$inc: { nextPatientNumber: 1 } },
         { upsert: true, returnDocument: 'after' }
     ).lean();
 
@@ -351,7 +352,7 @@ async function sendAppointmentAccepted(appointment) {
 
     const assistantMessage = `Hello Sir/Ma'am, I am your clinic's virtual assistant here to help guide you. Your appointment request has been accepted! Thank you for booking with Dr. P. N. Singh's clinic. Here is your confirmed patient number: *#${appointment.patientNumber}*.`;
     const buttons = ['📋 View Details', '📍 Clinic Location', '❓ FAQs'];
-    
+
     await sendWhatsAppInteractive(appointment.phone, assistantMessage, buttons);
     return templateResult;
 }
@@ -506,8 +507,6 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
             return res.status(400).json({ ok: false, message: 'Only a new appointment can be accepted.' });
         }
 
-        // Allocate a patient number atomically, then claim this appointment atomically.
-        // The conditional update prevents two receptionist clicks from accepting the same request twice.
         const patientNumber = appointment.patientNumber || await generatePatientNumber();
         const updated = await Appointment.findOneAndUpdate(
             { id: appointment.id, status: 'new', patientNumber: null },
@@ -586,6 +585,40 @@ app.get('/api/admin/messages', admin, async (req, res) => {
 });
 
 // ========================================
+// WHATSAPP BILINGUAL BOT DICTIONARY
+// ========================================
+const i18n = {
+    en: {
+        greeting: `Hello! I am Dr. P. N. Singh Clinic's virtual assistant. How can we assist you today?`,
+        btnBook: '📅 Book Appointment',
+        btnLocation: '📍 Clinic Location',
+        btnFees: '💵 Fees & Timings',
+        locationText: `📍 *Clinic Location*\n\nDr. P. N. Singh Clinic\nC-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh.\n\n🗺️ *Google Maps:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
+        feeText: `💵 *Fees & Consultation Timings*\n\n• *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n• *Fee:* ₹400 per session\n• *Clinic Hours:* Monday to Saturday, 10:00 AM – 7:00 PM (Closed Sundays).`,
+        askName: `📅 *WhatsApp Appointment Booking*\n\nLet's get you scheduled! First, please reply with your *Full Name*:`,
+        askDate: (name) => `Thank you, *${name}*.\n\nNow, what date would you like to book? (Please enter in format: *YYYY-MM-DD*, e.g., 2026-09-01)`,
+        askTime: `Got it. What preferred time slot would you like? (e.g., *11:00 AM* or *Evening*)`,
+        askMode: `Please choose your consultation mode:\n\n1️⃣ *Clinic Visit*\n2️⃣ *Online Consultation*\n\n(Simply reply with *Clinic* or *Online*)`,
+        askConcern: `Almost done! Do you have any specific health concern or symptoms to share?\n\n*(Type your concern or simply type *Skip* to bypass)*`,
+        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Appointment No:* #${appt.appointmentNumber}\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n\nThe clinic will confirm your appointment shortly. You will receive a message with your token number here!`
+    },
+    hi: {
+        greeting: `नमस्ते! मैं डॉ. पी. एन. सिंह क्लीनिक का वर्चुअल असिस्टेंट हूँ। आज हम आपकी कैसे मदद कर सकते हैं?`,
+        btnBook: '📅 अपॉइंटमेंट बुक', 
+        btnLocation: '📍 क्लीनिक का पता',
+        btnFees: '💵 फीस और समय',
+        locationText: `📍 *क्लीनिक का पता*\n\nडॉ. पी. एन. सिंह क्लीनिक\nसी-190, बिलंदपुर न्यू कॉलोनी, प्लैटिनम एमआरआई के पास, गोरखपुर, उत्तर प्रदेश।\n\n🗺️ *गूगल मैप्स:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
+        feeText: `💵 *फीस और समय*\n\n• *डॉक्टर:* डॉ. पी. एन. सिंह (न्यूरोसाइकियाट्रिस्ट)\n• *फीस:* ₹400 प्रति सेशन\n• *समय:* सोमवार - शनिवार, सुबह 10:00 – शाम 7:00 (रविवार बंद)।`,
+        askName: `📅 *व्हाट्सएप अपॉइंटमेंट बुकिंग*\n\nचलिए आपका अपॉइंटमेंट तय करते हैं! सबसे पहले, कृपया अपना *पूरा नाम* लिखकर भेजें:`,
+        askDate: (name) => `धन्यवाद, *${name}*।\n\nआप किस तारीख को अपॉइंटमेंट बुक करना चाहते हैं? (तारीख ऐसे लिखें: *YYYY-MM-DD*, उदाहरण: 2026-09-01)`,
+        askTime: `समझ गया। आप कौन सा समय पसंद करेंगे? (उदाहरण: *11:00 AM* या *शाम*)`,
+        askMode: `कृपया परामर्श का माध्यम चुनें:\n\n1️⃣ *क्लीनिक आकर*\n2️⃣ *ऑनलाइन परामर्श*\n\n(बस *क्लीनिक* या *ऑनलाइन* लिखकर भेजें)`,
+        askConcern: `लगभग पूरा हो गया! क्या आपको अपनी किसी समस्या के बारे में बताना है?\n\n*(अपनी समस्या लिखें या इसे छोड़ने के लिए *Skip* लिखें)*`,
+        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *अपॉइंटमेंट नंबर:* #${appt.appointmentNumber}\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n\nक्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!`
+    }
+};
+
+// ========================================
 // WHATSAPP WEBHOOK ROUTING & ACTIONS
 // ========================================
 app.get('/webhook', (req, res) => {
@@ -615,66 +648,78 @@ app.post('/webhook', async (req, res) => {
                         const message = value.messages[0];
                         const senderPhone = message.from;
 
-                        // Find or initialize session for this phone number
                         let session = await Session.findOne({ phone: senderPhone });
                         if (!session) {
-                            session = await Session.create({ phone: senderPhone, step: 'idle', data: {} });
+                            session = await Session.create({ phone: senderPhone, step: 'idle', data: { lang: 'en' } });
                         }
+                        
+                        if (!session.data) session.data = {};
+                        const lang = session.data.lang || 'en';
 
                         // 1. Handle interactive button clicks
                         if (message.type === 'interactive' && message.interactive?.button_reply) {
-                            const buttonTitle = message.interactive.button_reply.title || '';
+                            const btnTitle = message.interactive.button_reply.title || '';
 
-                            if (buttonTitle.includes('Location')) {
-                                const locationText = `📍 *Clinic Location*\n\nDr. P. N. Singh Clinic\nC-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh.\n\n🗺️ *Google Maps:* https://maps.google.com/?q=Bilandpur+Gorakhpur`;
-                                await sendWhatsAppText(senderPhone, locationText);
-                            } else if (buttonTitle.includes('FAQs')) {
-                                const faqText = `❓ *Frequently Asked Questions*\n\n• *Consultation Fee:* ₹400\n• *Consultation Modes:* In-Clinic & Teleconsultation\n• *Timings:* Mon - Sat (10:00 AM - 07:00 PM)\n• *Reports:* Please carry any previous prescriptions or medical test records.`;
-                                await sendWhatsAppText(senderPhone, faqText);
-                            } else if (buttonTitle.includes('Details') || buttonTitle.includes('View')) {
-                                const detailsText = `📋 *Appointment Guidance*\n\n• Please arrive 10 minutes prior to your selected consultation time.\n• Carry your token/patient number to show at the reception desk.\n• In case of rescheduling, please reach out directly.`;
-                                await sendWhatsAppText(senderPhone, detailsText);
-                            } else if (buttonTitle.includes('Fees') || buttonTitle.includes('Timings')) {
-                                const feeText = `💵 *Fees & Consultation Timings*\n\n• *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n• *Fee:* ₹400 per session\n• *Clinic Hours:* Monday to Saturday, 10:00 AM – 7:00 PM (Closed Sundays).`;
-                                await sendWhatsAppText(senderPhone, feeText);
-                            } else if (buttonTitle.includes('Book') || buttonTitle.includes('Pre-book')) {
-                                // Start WhatsApp Booking Flow!
-                                session.step = 'awaiting_name';
-                                session.data = {};
+                            if (btnTitle === 'English' || btnTitle === 'हिंदी') {
+                                const chosenLang = btnTitle === 'English' ? 'en' : 'hi';
+                                session.data.lang = chosenLang;
+                                session.step = 'idle';
                                 await session.save();
-                                await sendWhatsAppText(senderPhone, `📅 *WhatsApp Appointment Booking*\n\nLet's get you scheduled! First, please reply with your **Full Name**:`);
-                            } else if (buttonTitle.includes('Contact')) {
+                                await sendWhatsAppInteractive(senderPhone, i18n[chosenLang].greeting, [i18n[chosenLang].btnBook, i18n[chosenLang].btnLocation, i18n[chosenLang].btnFees]);
+                            } 
+                            else if (btnTitle.includes('Location') || btnTitle.includes('पता') || btnTitle.includes('FAQs')) {
+                                await session.save(); // Refreshes the 5-minute TTL timer
+                                await sendWhatsAppText(senderPhone, i18n[lang].locationText);
+                            } 
+                            else if (btnTitle.includes('Fees') || btnTitle.includes('फीस') || btnTitle.includes('Timings')) {
+                                await session.save(); 
+                                await sendWhatsAppText(senderPhone, i18n[lang].feeText);
+                            } 
+                            else if (btnTitle.includes('Book') || btnTitle.includes('अपॉइंटमेंट') || btnTitle.includes('Pre-book')) {
+                                session.step = 'awaiting_name';
+                                session.data.name = ''; session.data.date = ''; session.data.time = ''; session.data.mode = ''; session.data.concern = '';
+                                await session.save();
+                                await sendWhatsAppText(senderPhone, i18n[lang].askName);
+                            }
+                            else if (btnTitle.includes('Contact')) {
                                 const contactText = `📞 *Clinic Contact*\n\n• Clinic Desk: Available during OPD hours\n• Address: Bilandpur New Colony, Gorakhpur\n• Online Portal: https://drpnsingh.vercel.app/`;
                                 await sendWhatsAppText(senderPhone, contactText);
                             }
                         }
-                        // 2. Handle Conversational Text Inputs based on Session State
+                        // 2. Handle Text Inputs
                         else if (message.type === 'text') {
                             const userText = message.text.body.trim();
+                            const isGreeting = ['hi', 'hii', 'hello', 'hey', 'नमस्ते'].includes(userText.toLowerCase());
 
-                            if (session.step === 'awaiting_name') {
+                            if (isGreeting || session.step === 'idle') {
+                                session.step = 'awaiting_language';
+                                await session.save();
+                                const langPrompt = `Welcome to Dr. P. N. Singh's Clinic! 🏥\n\nPlease choose your preferred language / कृपया अपनी पसंदीदा भाषा चुनें:`;
+                                await sendWhatsAppInteractive(senderPhone, langPrompt, ['English', 'हिंदी']);
+                            } 
+                            else if (session.step === 'awaiting_name') {
                                 session.data.name = clean(userText, 100);
                                 session.step = 'awaiting_date';
                                 await session.save();
-                                await sendWhatsAppText(senderPhone, `Thank you, *${session.data.name}*.\n\nNow, what date would you like to book? (Please enter in format: *YYYY-MM-DD*, e.g., 2026-09-01)`);
+                                await sendWhatsAppText(senderPhone, i18n[lang].askDate(session.data.name));
                             } 
                             else if (session.step === 'awaiting_date') {
                                 session.data.date = clean(userText, 10);
                                 session.step = 'awaiting_time';
                                 await session.save();
-                                await sendWhatsAppText(senderPhone, `Got it. What preferred time slot would you like? (e.g., *11:00 AM* or *Evening*)`);
+                                await sendWhatsAppText(senderPhone, i18n[lang].askTime);
                             } 
                             else if (session.step === 'awaiting_time') {
                                 session.data.time = clean(userText, 20);
                                 session.step = 'awaiting_mode';
                                 await session.save();
-                                await sendWhatsAppText(senderPhone, `Please choose your consultation mode:\n\n1️⃣ *Clinic Visit*\n2️⃣ *Online Consultation*\n\n(Simply reply with *Clinic* or *Online*)`);
+                                await sendWhatsAppText(senderPhone, i18n[lang].askMode);
                             } 
                             else if (session.step === 'awaiting_mode') {
                                 session.data.mode = clean(userText, 30);
                                 session.step = 'awaiting_concern';
                                 await session.save();
-                                await sendWhatsAppText(senderPhone, `Almost done! Do you have any specific health concern or symptoms to share? \n\n*(Type your concern or simply type **None** or **Skip** to bypass)*`);
+                                await sendWhatsAppText(senderPhone, i18n[lang].askConcern);
                             } 
                             else if (session.step === 'awaiting_concern') {
                                 const rawConcern = clean(userText, 500);
@@ -682,7 +727,6 @@ app.post('/webhook', async (req, res) => {
                                 session.step = 'idle';
                                 await session.save();
 
-                                // Finalize and create appointment in database!
                                 const appointmentNumber = await generateAppointmentNumber();
                                 const formattedPhone = whatsappPhone(senderPhone);
 
@@ -703,18 +747,9 @@ app.post('/webhook', async (req, res) => {
                                 };
 
                                 await Appointment.create(appointment);
-
-                                // Fire Notifications (Patient confirmation + Clinic alert)
                                 await sendAppointmentRequestReceived(appointment);
                                 await sendClinicNewAppointment(appointment);
-
-                                await sendWhatsAppText(senderPhone, `✅ *Appointment Request Submitted Successfully!*\n\n• *Appointment No:* #${appointment.appointmentNumber}\n• *Date:* ${formatDate(appointment.date)}\n• *Time:* ${appointment.time}\n• *Mode:* ${appointment.mode}\n\nThe clinic will review and confirm your appointment shortly. You will receive a confirmation message with your token number here!`);
-                            } 
-                            else {
-                                // Default greeting if idle
-                                const greeting = `Hello! I am Dr. P. N. Singh Clinic's virtual assistant. How can we assist you today?`;
-                                const menuButtons = ['📅 Book Appointment', '📍 Clinic Location', '💵 Fees & Timings'];
-                                await sendWhatsAppInteractive(senderPhone, greeting, menuButtons);
+                                await sendWhatsAppText(senderPhone, i18n[lang].confirm(appointment));
                             }
                         }
                     }
