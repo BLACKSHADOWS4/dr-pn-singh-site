@@ -664,11 +664,11 @@ const i18n = {
         locationText: `📍 *Clinic Location*\n\nDr. P. N. Singh Clinic\nC-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh.\n\n🗺️ *Google Maps:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
         feeText: `💵 *Fees & Consultation Timings*\n\n• *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n• *Fee:* ₹400 per session\n• *Clinic Hours:* Monday to Saturday, 10:00 AM – 7:00 PM (Closed Sundays).`,
         askName: `📅 *WhatsApp Appointment Booking*\n\nLet's get you scheduled! First, please reply with your *Full Name*:`,
-        askDate: (name) => `Thank you, *${name}*.\n\nPlease simply reply with the *Day number* you want to book for this month (e.g., *18*):`,
+        askDate: (name) => `Thank you, *${name}*! 📅\n\nPlease enter the date you want to book for your consultation (e.g., simply type the day number like *18*):`,
         askTime: `Got it. What preferred time slot would you like? (e.g., *11:00 AM* or *Evening*)`,
         askMode: `Please choose your consultation mode:\n\n1️⃣ *Clinic Visit*\n2️⃣ *Online Consultation*\n\n(Simply reply with *Clinic* or *Online*)`,
         askConcern: `Almost done! Do you have any specific health concern or symptoms to share?\n\n*(Type your concern or simply type *Skip* to bypass)*`,
-        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Appointment No:* #${appt.appointmentNumber}\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n\nThe clinic will confirm your appointment shortly. You will receive a message with your token number here!`
+        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n\nThe clinic will confirm your appointment shortly. You will receive your confirmed patient token number here soon!`
     },
     hi: {
         greeting: `नमस्ते! मैं डॉ. पी. एन. सिंह क्लीनिक का वर्चुअल असिस्टेंट हूँ। आज हम आपकी कैसे मदद कर सकते हैं?`,
@@ -678,13 +678,14 @@ const i18n = {
         locationText: `📍 *क्लीनिक का पता*\n\nडॉ. पी. एन. सिंह क्लीनिक\nसी-190, बिलंदपुर न्यू कॉलोनी, प्लैटिनम एमआरआई के पास, गोरखपुर, उत्तर प्रदेश।\n\n🗺️ *गूगल मैप्स:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
         feeText: `💵 *फीस और समय*\n\n• *डॉक्टर:* डॉ. पी. एन. सिंह (न्यूरोसाइकियाट्रिस्ट)\n• *फीस:* ₹400 प्रति सेशन\n• *समय:* सोमवार - शनिवार, सुबह 10:00 – शाम 7:00 (रविवार बंद)।`,
         askName: `📅 *व्हाट्सएप अपॉइंटमेंट बुकिंग*\n\nचलिए आपका अपॉइंटमेंट तय करते हैं! सबसे पहले, कृपया अपना *पूरा नाम* लिखकर भेजें:`,
-        askDate: (name) => `धन्यवाद, *${name}*।\n\nकृपया इस महीने की केवल *तारीख (दिन का नंबर)* लिखकर भेजें (उदाहरण के लिए: *18*):`,
+        askDate: (name) => `धन्यवाद, *${name}*! 📅\n\nकृपया वह तारीख दर्ज करें जिस दिन आप कंसल्टेशन अपॉइंटमेंट बुक करना चाहते हैं (उदाहरण के लिए: केवल दिन का नंबर जैसे *18* लिखें):`,
         askTime: `समझ गया। आप कौन सा समय पसंद करेंगे? (उदाहरण: *11:00 AM* या *शाम*)`,
         askMode: `कृपया परामर्श का माध्यम चुनें:\n\n1️⃣ *क्लीनिक आकर*\n2️⃣ *ऑनलाइन परामर्श*\n\n(बस *क्लीनिक* या *ऑनलाइन* लिखकर भेजें)`,
         askConcern: `लगभग पूरा हो गया! क्या आपको अपनी किसी समस्या के बारे में बताना है?\n\n*(अपनी समस्या लिखें या इसे छोड़ने के लिए *Skip* लिखें)*`,
-        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *अपॉइंटमेंट नंबर:* #${appt.appointmentNumber}\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n\nक्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!`
+        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n\nक्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!`
     }
 };
+
 
 // ========================================
 // WHATSAPP WEBHOOK ROUTING & ACTIONS
