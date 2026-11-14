@@ -407,7 +407,7 @@
 <!-- JAVASCRIPT SCRIPTS -->
 <script src="/app.js"></script>
 <script>
-    // Problem 2 Fix: Disable past time slots for today on website booking forms
+    // Problem 2 Fix: Completely remove past time slots for today on website booking forms so they don't show up
     document.addEventListener('DOMContentLoaded', () => {
         const dateInputs = document.querySelectorAll('input[type="date"]');
         
@@ -415,22 +415,28 @@
             const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
             dateInput.min = todayIso;
 
-            const updateTimeSlots = (dateInputEl) => {
-                const selectedDate = dateInputEl.value;
-                const form = dateInputEl.closest('form');
-                if (!form) return;
-                const timeSelect = form.querySelector('select[name="time"]');
-                if (!timeSelect) return;
+            const form = dateInput.closest('form');
+            if (!form) return;
+            const timeSelect = form.querySelector('select[name="time"]');
+            if (!timeSelect) return;
 
-                // Reset options
-                Array.from(timeSelect.options).forEach(opt => opt.disabled = false);
+            // Save original options list once
+            if (!timeSelect.dataset.originalOptions) {
+                timeSelect.dataset.originalOptions = timeSelect.innerHTML;
+            }
+
+            const updateTimeSlots = () => {
+                const selectedDate = dateInput.value;
+                // Restore all original options first
+                timeSelect.innerHTML = timeSelect.dataset.originalOptions;
 
                 if (selectedDate === todayIso) {
                     const now = new Date();
                     const istTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
                     const [currH, currM] = istTimeStr.split(':').map(Number);
 
-                    Array.from(timeSelect.options).forEach(opt => {
+                    const options = Array.from(timeSelect.options);
+                    options.forEach(opt => {
                         const optText = opt.textContent.trim();
                         if (!optText || optText === 'Choose' || optText === 'चुनें') return;
 
@@ -443,17 +449,18 @@
                             if (period.toUpperCase() === 'PM' && slotHour < 12) slotHour += 12;
                             if (period.toUpperCase() === 'AM' && slotHour === 12) slotHour = 0;
 
+                            // If the time slot has passed today, remove it completely from the dropdown list
                             if (slotHour < currH || (slotHour === currH && slotMin <= currM)) {
-                                opt.disabled = true;
+                                opt.remove();
                             }
                         }
                     });
                 }
             };
 
-            dateInput.addEventListener('change', (e) => updateTimeSlots(e.target));
+            dateInput.addEventListener('change', updateTimeSlots);
             if (dateInput.value) {
-                updateTimeSlots(dateInput);
+                updateTimeSlots();
             }
         });
     });
@@ -607,5 +614,3 @@
         }
     });
 </script>
-</body>
-</html>
