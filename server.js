@@ -725,7 +725,7 @@ app.post('/webhook', async (req, res) => {
                         if (!session.data) session.data = {};
                         const lang = session.data.lang || 'en';
 
-                        // 1. Handle interactive button clicks
+// 1. Handle interactive button clicks
                         if (message.type === 'interactive' && message.interactive?.button_reply) {
                             const btnTitle = message.interactive.button_reply.title || '';
 
@@ -755,126 +755,116 @@ app.post('/webhook', async (req, res) => {
                                 await sendWhatsAppText(senderPhone, contactText);
                             }
                         }
-                        // 2. Handle Text Inputs
-                        else if (message.type === 'text') {
-                            const userText = message.text.body.trim();
-                            const isGreeting = ['hi', 'hii', 'hello', 'hey', 'नमस्ते'].includes(userText.toLowerCase());
+ // 2. Handle Text Inputs
+else if (message.type === 'text') {
+    const userText = message.text.body.trim();
+    const isGreeting = ['hi', 'hii', 'hello', 'hey', 'नमस्ते'].includes(userText.toLowerCase());
 
-                            if (isGreeting || session.step === 'idle') {
-                                session.step = 'awaiting_language';
-                                await session.save();
-                                const langPrompt = `Welcome to Dr. P. N. Singh's Clinic! 🏥\n\nPlease choose your preferred language / कृपया अपनी पसंदीदा भाषा चुनें:`;
-                                await sendWhatsAppInteractive(senderPhone, langPrompt, ['English', 'हिंदी']);
-                            } 
-                            else if (session.step === 'awaiting_name') {
-                                session.data.name = clean(userText, 100);
-                                session.step = 'awaiting_date';
-                                await session.save();
-                                await sendWhatsAppText(senderPhone, i18n[lang].askDate(session.data.name));
-                            } 
-                            else if (session.step === 'awaiting_date') {
-                                const parsedDate = normalizeDate(userText);
-                                const currToday = todayString();
-                                
-                                if (!parsedDate || parsedDate < currToday) {
-                                    const errPrompt = lang === 'hi' 
-                                        ? `❌ अमान्य या पुरानी तारीख! कृपया आज या आगे की वैध तारीख (जैसे 18) सही से लिखें।`
-                                        : `❌ Invalid or past date! Please enter a valid upcoming day number (e.g., 18).`;
-                                    await sendWhatsAppText(senderPhone, errPrompt);
-                                    return;
-                                }
-
-                                session.data.date = parsedDate;
-                                session.step = 'awaiting_time';
-                                await session.save();
-                                await sendWhatsAppText(senderPhone, i18n[lang].askTime);
-                            } 
-                            else if (session.step === 'awaiting_time') {
-                                let timeText = clean(userText, 20);
-                                if (/^\d{1,2}$/.test(timeText)) {
-                                    timeText = timeText + ':00 AM';
-                                }
-                                session.data.time = timeText;
-                                session.step = 'awaiting_mode';
-                                await session.save();
-                                await sendWhatsAppText(senderPhone, i18n[lang].askMode);
-                            } 
-                            else if (session.step === 'awaiting_mode') {
-                                const text = userText.toLowerCase();
-                                let selectedMode = 'Clinic Visit';
-
-                                if (text.includes('2') || text.includes('online') || text.includes('ऑनलाइन')) {
-                                    selectedMode = 'Online Consultation';
-                                } else if (text.includes('1') || text.includes('clinic') || text.includes('क्लीनिक') || text.includes('आकर')) {
-                                    selectedMode = 'Clinic Visit';
-                                } else {
-                                    selectedMode = clean(userText, 30);
-                                }
-
-                                session.data.mode = selectedMode;
-                                session.step = 'awaiting_concern';
-                                await session.save();
-                                await sendWhatsAppText(senderPhone, i18n[lang].askConcern);
-                            } 
-                            else if (session.step === 'awaiting_concern') {
-                                const rawConcern = clean(userText, 500);
-                                session.data.concern = (rawConcern.toLowerCase() === 'none' || rawConcern.toLowerCase() === 'skip') ? '' : rawConcern;
-                                
-                                const formattedPhone = whatsappPhone(senderPhone);
-
-                                // Check for duplicate active appointment on WhatsApp
-                                const existingActive = await Appointment.findOne({
-                                    phone: formattedPhone,
-                                    status: { $in: ['new', 'accepted'] }
-                                });
-                                if (existingActive) {
-                                    session.step = 'idle';
-                                    await session.save();
-                                    const dupMsg = lang === 'hi' 
-                                        ? `❌ आपके इस नंबर पर पहले से ही एक एक्टिव अपॉइंटमेंट (#${existingActive.appointmentNumber}) मौजूद है। कृपया पहले वाले के पूरा होने का इंतज़ार करें।`
-                                        : `❌ You already have an active appointment request (#${existingActive.appointmentNumber}). Please wait for it to be processed.`;
-                                    await sendWhatsAppText(senderPhone, dupMsg);
-                                    return;
-                                }
-
-                                session.step = 'idle';
-                                await session.save();
-
-                                const appointmentNumber = await generateAppointmentNumber();
-
-                                const appointment = {
-                                    id: crypto.randomUUID(),
-                                    appointmentNumber,
-                                    createdAt: new Date().toISOString(),
-                                    status: 'new',
-                                    patientNumber: null,
-                                    name: session.data.name,
-                                    phone: formattedPhone,
-                                    email: '', 
-                                    date: session.data.date,
-                                    time: session.data.time,
-                                    mode: session.data.mode,
-                                    concern: session.data.concern,
-                                    payment: { status: 'unpaid', amount: null, method: null, paidAt: null }
-                                };
-
-                                await Appointment.create(appointment);
-                                await sendAppointmentRequestReceived(appointment);
-                                await sendClinicNewAppointment(appointment);
-                                await sendWhatsAppText(senderPhone, i18n[lang].confirm(appointment));
-                            }
-                        }
-                    }
-                }
-            }
-            return res.status(200).send('EVENT_RECEIVED');
+    if (isGreeting || session.step === 'idle') {
+        session.step = 'awaiting_language';
+        await session.save();
+        const langPrompt = `Welcome to Dr. P. N. Singh's Clinic! 🏥\n\nPlease choose your preferred language / कृपया अपनी पसंदीदा भाषा चुनें:`;
+        await sendWhatsAppInteractive(senderPhone, langPrompt, ['English', 'हिंदी']);
+    } 
+    else if (session.step === 'awaiting_name') {
+        session.data.name = clean(userText, 100);
+        session.step = 'awaiting_date';
+        await session.save();
+        await sendWhatsAppText(senderPhone, i18n[lang].askDate(session.data.name));
+    } 
+    else if (session.step === 'awaiting_date') {
+        const parsedDate = normalizeDate(userText);
+        const currToday = todayString();
+        
+        if (!parsedDate || parsedDate < currToday) {
+            const errPrompt = lang === 'hi' 
+                ? `❌ जो तारीख आप डाल रहे हैं वो गलत है या फिर वो डेट बीत चुका है। इस वजह से हम इस डेट में अपॉइंटमेंट नहीं ले सकते। कृपया कोई दूसरी वैध तारीख दर्ज करें:`
+                : `❌ The date you entered is invalid or has already passed. We cannot accept appointments for past dates. Please enter another valid date:`;
+            await sendWhatsAppText(senderPhone, errPrompt);
+            return;
         }
-        return res.sendStatus(404);
-    } catch (error) {
-        console.error('[Webhook Error]:', error);
-        return res.sendStatus(500);
+
+        session.data.date = parsedDate;
+        session.step = 'awaiting_time';
+        await session.save();
+        await sendWhatsAppText(senderPhone, i18n[lang].askTime);
+    } 
+    else if (session.step === 'awaiting_time') {
+        let timeText = clean(userText, 20);
+        if (/^\d{1,2}$/.test(timeText)) {
+            timeText = timeText + ':00 AM';
+        }
+        session.data.time = timeText;
+        session.step = 'awaiting_mode';
+        await session.save();
+        await sendWhatsAppText(senderPhone, i18n[lang].askMode);
+    } 
+    else if (session.step === 'awaiting_mode') {
+        const text = userText.toLowerCase();
+        let selectedMode = 'Clinic Visit';
+
+        if (text.includes('2') || text.includes('online') || text.includes('ऑनलाइन')) {
+            selectedMode = 'Online Consultation';
+        } else if (text.includes('1') || text.includes('clinic') || text.includes('क्लीनिक') || text.includes('आकर')) {
+            selectedMode = 'Clinic Visit';
+        } else {
+            selectedMode = clean(userText, 30);
+        }
+
+        session.data.mode = selectedMode;
+        session.step = 'awaiting_concern';
+        await session.save();
+        await sendWhatsAppText(senderPhone, i18n[lang].askConcern);
+    } 
+    else if (session.step === 'awaiting_concern') {
+        const rawConcern = clean(userText, 500);
+        session.data.concern = (rawConcern.toLowerCase() === 'none' || rawConcern.toLowerCase() === 'skip') ? '' : rawConcern;
+        
+        const formattedPhone = whatsappPhone(senderPhone);
+
+        // Check for duplicate active appointment on WhatsApp
+        const existingActive = await Appointment.findOne({
+            phone: formattedPhone,
+            status: { $in: ['new', 'accepted'] }
+        });
+        if (existingActive) {
+            session.step = 'idle';
+            await session.save();
+            const dupMsg = lang === 'hi' 
+                ? `❌ आपके इस नंबर पर पहले से ही एक एक्टिव अपॉइंटमेंट (#${existingActive.appointmentNumber}) मौजूद है। कृपया पहले वाले के पूरा होने का इंतज़ार करें।`
+                : `❌ You already have an active appointment request (#${existingActive.appointmentNumber}). Please wait for it to be processed.`;
+            await sendWhatsAppText(senderPhone, dupMsg);
+            return;
+        }
+
+        session.step = 'idle';
+        await session.save();
+
+        const appointmentNumber = await generateAppointmentNumber();
+
+        const appointment = {
+            id: crypto.randomUUID(),
+            appointmentNumber,
+            createdAt: new Date().toISOString(),
+            status: 'new',
+            patientNumber: null,
+            name: session.data.name,
+            phone: formattedPhone,
+            email: '', 
+            date: session.data.date,
+            time: session.data.time,
+            mode: session.data.mode,
+            concern: session.data.concern,
+            payment: { status: 'unpaid', amount: null, method: null, paidAt: null }
+        };
+
+        await Appointment.create(appointment);
+        await sendAppointmentRequestReceived(appointment);
+        await sendClinicNewAppointment(appointment);
+        await sendWhatsAppText(senderPhone, i18n[lang].confirm(appointment));
     }
-});
+}
+
 
 // ========================================
 // API ERROR HANDLER
