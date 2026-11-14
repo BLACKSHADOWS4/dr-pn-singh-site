@@ -1,105 +1,214 @@
 <!doctype html>
 <html lang="en">
 <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Reception | Dr. P. N. Singh Clinic</title>
-        <link rel="stylesheet" href="admin.css">
-
-        <!-- Vercel Web Analytics -->
-        <script>
-          window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-        </script>
-        <script defer src="/_vercel/insights/script.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Receptionist Dashboard | Dr. P. N. Singh Clinic</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 0; }
+        .admin-header { background: #1e3a8a; color: #fff; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .admin-container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
+        .controls-card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; gap: 15px; align-items: center; margin-bottom: 25px; flex-wrap: wrap; }
+        .controls-card label { font-weight: 600; font-size: 0.95rem; }
+        .controls-card input[type="date"], .controls-card input[type="password"] { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; }
+        .appointment-card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border-left: 5px solid #3b82f6; }
+        .appointment-card.accepted { border-left-color: #10b981; }
+        .appointment-card.cancelled { border-left-color: #ef4444; }
+        .row-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
+        .row-info span.label { color: #64748b; font-weight: 500; }
+        .row-info span.val { font-weight: 600; color: #1e293b; }
+        .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; }
+        .badge.new { background: #fef3c7; color: #d97706; }
+        .badge.accepted { background: #d1fae5; color: #059669; }
+        .badge.cancelled { background: #fee2e2; color: #dc2626; }
+        .action-btns { margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end; }
+        .btn-action { padding: 8px 16px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+        .btn-accept { background: #10b981; color: #fff; }
+        .btn-cancel { background: #ef4444; color: #fff; }
+        .login-box { max-width: 400px; margin: 100px auto; background: #fff; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; }
+    </style>
 </head>
 <body>
-        <div class="app-shell">
-                <header class="topbar">
-                        <div class="brand-mark" aria-hidden="true">PN</div>
-                        <div class="brand-copy">
-                                <strong>Dr. P. N. Singh Clinic</strong>
-                                <span>Reception desk</span>
+
+    <!-- ADMIN LOGIN MODAL / VIEW -->
+    <div id="loginView" class="login-box">
+        <h2>Admin Login</h2>
+        <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">Enter your admin key to access receptionist dashboard.</p>
+        <input type="password" id="adminKeyInput" placeholder="Enter Admin Key" style="width: 100%; box-sizing: border-box; margin-bottom: 15px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
+        <button onclick="handleLogin()" class="btn btn-primary full" style="width: 100%; padding: 12px; background: #1e3a8a; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Login</button>
+        <p id="loginError" style="color: #ef4444; font-size: 0.85rem; margin-top: 10px;"></p>
+    </div>
+
+    <!-- DASHBOARD VIEW -->
+    <div id="dashboardView" style="display: none;">
+        <header class="admin-header">
+            <h2 style="margin: 0; font-size: 1.2rem;"><i class="fa-solid fa-hospital-user"></i> Dr. P. N. Singh Clinic - Reception</h2>
+            <button onclick="handleLogout()" style="background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 500;">Logout</button>
+        </header>
+
+        <div class="admin-container">
+            <div class="controls-card">
+                <div>
+                    <label for="dateFilter">Select Date: </label>
+                    <input type="date" id="dateFilter" onchange="fetchAppointments()">
+                </div>
+                <button onclick="loadToday()" class="btn-action" style="background: #e2e8f0; color: #1e293b;">Today</button>
+                <div style="margin-left: auto; font-weight: 600; color: #475569;" id="totalCount">Total: 0 appointments</div>
+            </div>
+
+            <div id="appointmentsList">
+                <!-- Appointments will be loaded here dynamically -->
+            </div>
+        </div>
+    </div>
+
+<script>
+    let adminKey = localStorage.getItem('drpn_admin_key') || '';
+
+    window.addEventListener('DOMContentLoaded', () => {
+        if (adminKey) {
+            verifyAndOpenDashboard();
+        }
+    });
+
+    async function handleLogin() {
+        const key = document.getElementById('adminKeyInput').value.trim();
+        if (!key) return;
+
+        try {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key })
+            });
+            const data = await res.json();
+            if (data.success) {
+                adminKey = key;
+                localStorage.setItem('drpn_admin_key', key);
+                verifyAndOpenDashboard();
+            } else {
+                document.getElementById('loginError').textContent = 'Invalid Admin Key!';
+            }
+        } catch (err) {
+            document.getElementById('loginError').textContent = 'Connection error.';
+        }
+    }
+
+    function handleLogout() {
+        localStorage.removeItem('drpn_admin_key');
+        adminKey = '';
+        document.getElementById('dashboardView').style.display = 'none';
+        document.getElementById('loginView').style.display = 'block';
+    }
+
+    function verifyAndOpenDashboard() {
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('dashboardView').style.display = 'block';
+        
+        // Set date filter to today by default if empty
+        const dateInput = document.getElementById('dateFilter');
+        if (!dateInput.value) {
+            const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+            dateInput.value = todayIso;
+        }
+        fetchAppointments();
+    }
+
+    function loadToday() {
+        const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        document.getElementById('dateFilter').value = todayIso;
+        fetchAppointments();
+    }
+
+    // Problem 3 Fix: Auto-fetches appointments as soon as date picker changes
+    async function fetchAppointments() {
+        const selectedDate = document.getElementById('dateFilter').value;
+        const listContainer = document.getElementById('appointmentsList');
+        listContainer.innerHTML = '<p style="text-align: center; color: #64748b;">Loading appointments...</p>';
+
+        try {
+            const res = await fetch(`/api/admin/appointments?date=${selectedDate}`, {
+                headers: { 'x-admin-key': adminKey }
+            });
+            const data = await res.json();
+
+            if (!data.ok) {
+                listContainer.innerHTML = `<p style="text-align: center; color: #ef4444;">Error: ${data.message || 'Unauthorized'}</p>`;
+                if (res.status === 401) handleLogout();
+                return;
+            }
+
+            const appointments = data.appointments || [];
+            document.getElementById('totalCount').textContent = `Total: ${appointments.length} appointments`;
+
+            if (appointments.length === 0) {
+                listContainer.innerHTML = '<div style="background: #fff; padding: 30px; border-radius: 12px; text-align: center; color: #64748b;">No appointments found for this date.</div>';
+                return;
+            }
+
+            let html = '';
+            appointments.forEach(appt => {
+                const statusClass = appt.status === 'accepted' ? 'accepted' : (appt.status === 'cancelled' ? 'cancelled' : '');
+                html += `
+                    <div class="appointment-card ${statusClass}">
+                        <div class="row-info"><span class="label">APPOINTMENT ID</span><span class="val">#${appt.appointmentNumber || 'N/A'}</span></div>
+                        <div class="row-info"><span class="label">PATIENT NO.</span><span class="val">${appt.patientNumber ? '#' + appt.patientNumber : '—'}</span></div>
+                        <div class="row-info"><span class="label">PATIENT NAME</span><span class="val">${appt.name}</span></div>
+                        <div class="row-info"><span class="label">PHONE</span><span class="val"><a href="tel:${appt.phone}" style="color: #2563eb; text-decoration: none;">${appt.phone}</a></span></div>
+                        <div class="row-info"><span class="label">DATE & TIME</span><span class="val">${appt.date} at ${appt.time}</span></div>
+                        <div class="row-info"><span class="label">MODE</span><span class="val">${appt.mode}</span></div>
+                        <div class="row-info"><span class="label">STATUS</span><span class="val"><span class="badge ${appt.status}">${appt.status}</span></span></div>
+                        <div class="row-info"><span class="label">EMAIL</span><span class="val">${appt.email || '—'}</span></div>
+                        ${appt.concern ? `<div class="row-info"><span class="label">CONCERN</span><span class="val">${appt.concern}</span></div>` : ''}
+                        
+                        <div class="action-btns">
+                            ${appt.status === 'new' ? `
+                                <button onclick="updateStatus('${appt.id}', 'accepted')" class="btn-action btn-accept">Accept & Assign Token</button>
+                                <button onclick="updateStatus('${appt.id}', 'cancelled')" class="btn-action btn-cancel">Cancel</button>
+                            ` : ''}
+                            ${appt.status === 'accepted' ? `
+                                <span style="color: #059669; font-weight: 600; align-self: center; font-size: 0.9rem;"><i class="fa-solid fa-check-circle"></i> Active & Token Assigned</span>
+                                <button onclick="updateStatus('${appt.id}', 'cancelled')" class="btn-action btn-cancel" style="padding: 6px 12px; font-size: 0.8rem;">Cancel</button>
+                            ` : ''}
                         </div>
-                        <div class="topbar-actions">
-                                <span class="sync-status"><span class="status-dot"></span><span id="syncText">Ready</span></span>
-                                <button class="button button-quiet" id="logoutButton" type="button">Sign out</button>
-                        </div>
-                </header>
+                    </div>
+                `;
+            });
+            listContainer.innerHTML = html;
 
-                <main class="main-content">
-                        <section class="page-heading">
-                                <div>
-                                        <p class="eyebrow">Clinic operations</p>
-                                        <h1>Appointments</h1>
-                                        <p class="heading-note">Review requests, confirm visits, and record payments.</p>
-                                </div>
-                                <button class="button button-outline" id="refreshButton" type="button"><span aria-hidden="true">↻</span> Refresh</button>
-                        </section>
+        } catch (err) {
+            listContainer.innerHTML = '<p style="text-align: center; color: #ef4444;">Failed to load appointments. Please check connection.</p>';
+        }
+    }
 
-                        <section class="metrics" aria-label="Appointment summary">
-                                <article class="metric metric-new"><span class="metric-label">New</span><strong id="newCount">0</strong><span class="metric-caption">Needs review</span></article>
-                                <article class="metric metric-accepted"><span class="metric-label">Accepted</span><strong id="acceptedCount">0</strong><span class="metric-caption">Confirmed visits</span></article>
-                                <article class="metric metric-today"><span class="metric-label">Today</span><strong id="todayCount">0</strong><span class="metric-caption">All statuses</span></article>
-                                <article class="metric metric-completed"><span class="metric-label">Completed</span><strong id="completedCount">0</strong><span class="metric-caption">Finished visits</span></article>
-                        </section>
+    async function updateStatus(id, status) {
+        if (!confirm(`Are you sure you want to mark this appointment as ${status}?`)) return;
 
-                        <section class="toolbar">
-                                <label class="search-box" for="searchInput"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Search patient name or phone" autocomplete="off"><kbd>/</kbd></label>
-                                
-                                <!-- यहाँ कैलेंडर / डेट फिल्टर जोड़ दिया गया है -->
-                                <div class="toolbar-date-filter">
-                                        <label for="dateFilterInput" style="font-size: 13px; color: #666; margin-right: 5px;">Date:</label>
-                                        <input id="dateFilterInput" type="date" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                                </div>
+        try {
+            const res = await fetch(`/api/admin/appointments/${id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-key': adminKey
+                },
+                body: JSON.stringify({ status })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                fetchAppointments(); // Refresh the list automatically
+            } else {
+                alert(data.message || 'Failed to update status.');
+            }
+        } catch (err) {
+            alert('Network error while updating status.');
+        }
+    }
+</script>
 
-                                <div class="toolbar-meta"><span id="appointmentCount">0 appointments</span><span class="auto-refresh">Auto-refreshes every 5 seconds</span></div>
-                        </section>
-
-                        <section class="table-panel">
-                                <div class="table-wrap">
-                                        <table>
-                                                <!-- Appointment ID column yahan se hata diya gaya hai -->
-                                                <thead>
-                                                        <tr>
-                                                                <th>Patient No.</th>
-                                                                <th>Patient Name</th>
-                                                                <th>Phone</th>
-                                                                <th>Date &amp; time</th>
-                                                                <th>Mode</th>
-                                                                <th>Status</th>
-                                                                <th>Email</th>
-                                                                <th><span class="sr-only">Action</span></th>
-                                                        </tr>
-                                                </thead>
-                                                <tbody id="appointmentsBody">
-                                                        <tr><td class="table-state" colspan="8"><span class="loader"></span>Loading appointments...</td></tr>
-                                                </tbody>
-                                        </table>
-                                </div>
-                        </section>
-                </main>
-        </div>
-
-        <div class="modal-backdrop" id="modalBackdrop" hidden>
-                <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-                        <button class="modal-close" id="closeModal" type="button" aria-label="Close">×</button>
-                        <div id="modalContent"></div>
-                </section>
-        </div>
-
-        <div class="toast" id="toast" role="status" aria-live="polite"></div>
-        <div class="login-screen" id="loginScreen">
-                <form class="login-box" id="loginForm">
-                        <div class="brand-mark" aria-hidden="true">PN</div>
-                        <p class="eyebrow">Reception desk</p>
-                        <h1>Sign in to appointments</h1>
-                        <p class="login-note">Enter the clinic admin key to continue.</p>
-                        <label for="adminKeyInput">Admin key</label>
-                        <input id="adminKeyInput" type="password" autocomplete="current-password" required>
-                        <p class="login-error" id="loginError" aria-live="polite"></p>
-                        <button class="button action-primary" type="submit">Sign in</button>
-                </form>
-        </div>
-        <script src="admin.js"></script>
 </body>
 </html>
