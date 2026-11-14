@@ -27,7 +27,7 @@ async function connectToDatabase() {
 
 // Middleware to connect before API routes
 app.use(async (req, res, next) => {
-    if (req.path.startsWith('/api')) {
+    if (req.path.startsWith('/api') && req.path !== '/api/admin/login') {
         try {
             await connectToDatabase();
         } catch (err) {
