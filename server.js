@@ -4,16 +4,15 @@ const crypto = require('crypto');
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-// ========================================
+// ==========================================
 // 1. INITIALIZE APP FIRST
-// ========================================
+// ==========================================
 const app = express();
 
-// ========================================
+// ==========================================
 // DATABASE CONNECTION (VERCEL OPTIMIZED)
-// ========================================
+// ==========================================
 const MONGODB_URI = process.env.MONGODB_URI || '';
-
 async function connectToDatabase() {
     if (mongoose.connection.readyState === 1) return;
     try {
@@ -40,9 +39,9 @@ app.use(async (req, res, next) => {
     next();
 });
 
-// ========================================
+// ==========================================
 // SERVER & WHATSAPP CONFIGURATION
-// ========================================
+// ==========================================
 const PORT = Number(process.env.PORT || 3000);
 const ADMIN_KEY = process.env.ADMIN_KEY || 'change-this-admin-key';
 const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
@@ -55,14 +54,13 @@ const CLINIC_PHONE = process.env.CLINIC_PHONE || '';
 const CLINIC_EMAIL = process.env.CLINIC_EMAIL || '';
 const CLINIC_PAYMENT_NAME = process.env.CLINIC_PAYMENT_NAME || 'Dr. P. N. Singh';
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'clinic_verify_token';
-
 const WA_TEMPLATE_REQUEST_RECEIVED = process.env.WHATSAPP_TEMPLATE_REQUEST_RECEIVED || 'appointment_request_received';
 const WA_TEMPLATE_CLINIC_NEW_APPOINTMENT = process.env.WHATSAPP_TEMPLATE_CLINIC_ALERT || 'clinic_new_appointment';
 const WA_TEMPLATE_LANGUAGE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
 
-// ========================================
+// ==========================================
 // MONGOOSE SCHEMAS & MODELS
-// ========================================
+// ==========================================
 const appointmentSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
     appointmentNumber: { type: String, required: true },
@@ -119,7 +117,6 @@ const sessionSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Tells MongoDB to automatically delete the session 300 seconds (5 mins) after last update
 sessionSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 300 });
 
 const Appointment = mongoose.models.Appointment || mongoose.model('Appointment', appointmentSchema);
@@ -128,28 +125,31 @@ const PatientCounter = mongoose.models.PatientCounter || mongoose.model('Patient
 const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
 const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
 
-// ========================================
+// ==========================================
 // MIDDLEWARE
-// ========================================
+// ==========================================
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ========================================
-// HELPERS
-// ========================================
+// ==========================================
+// HELPERS & SMART DATE NORMALIZATION
+// ==========================================
 const clean = (value, max = 500) => String(value ?? '').trim().slice(0, max);
-const email = value => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const emailRegex = value => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
 const indianMobile = value => {
     const cleaned = String(value ?? '').replace(/[\s-]/g, '');
     return /^(?:\+91|91)?[6-9]\d{9}$/.test(cleaned);
 };
+
 const whatsappPhone = value => {
     const cleaned = String(value ?? '').replace(/\D/g, '');
     if (cleaned.length === 10) return '91' + cleaned;
     if (cleaned.length === 12 && cleaned.startsWith('91')) return cleaned;
     return cleaned;
 };
+
 function indiaDateParts(date = new Date()) {
     const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Kolkata',
@@ -172,46 +172,58 @@ const isValidISODate = value => {
     const [year, month, day] = value.split('-').map(Number);
     const date = new Date(Date.UTC(year, month - 1, day));
     return date.getUTCFullYear() === year &&
-        date.getUTCMonth() === month - 1 &&
-        date.getUTCDate() === day;
+           date.getUTCMonth() === month - 1 &&
+           date.getUTCDate() === day;
 };
 
-// Smart Date Normalization: Handles day numbers, separators, and missing slashes/spaces
+// Smart Date Normalization for WhatsApp (Locks year, allows flexible months/days, auto-rolls next month if day passed)
 function normalizeDate(text) {
     const cleaned = String(text || '').trim();
-    const currentToday = todayString(); // "YYYY-MM-DD"
-    const [currYear, currMonth, currDay] = currentToday.split('-');
-    
-    // 1. If patient types just day number (e.g. "18" or "5")
+    const currentToday = todayString();
+    const [currYear, currMonth, currDay] = currentToday.split('-').map(Number);
+
+    // 1. If user types just day number (e.g. "18" or "5")
     if (/^\d{1,2}$/.test(cleaned)) {
-        const dayNum = cleaned.padStart(2, '0');
-        const candidateDate = `${currYear}-${currMonth}-${dayNum}`;
-        if (isValidISODate(candidateDate)) return candidateDate;
+        let dayNum = Number(cleaned);
+        let m = currMonth;
+        let y = currYear;
+        if (dayNum < currDay) {
+            m += 1;
+            if (m > 12) { m = 1; y += 1; }
+        }
+        const candidateDate = `${y}-${String(m).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+        if (isValidISODate(candidateDate) && candidateDate >= currentToday) return candidateDate;
     }
-    
-    // 2. If 8 digits without separators (e.g. "10122026" -> DDMMYYYY)
+
+    // 2. 8 digits without separators (DDMMYYYY)
     let digitsOnly = cleaned.replace(/\D/g, '');
     if (digitsOnly.length === 8) {
-        const d = digitsOnly.substring(0, 2);
-        const m = digitsOnly.substring(2, 4);
-        const y = digitsOnly.substring(4, 8);
-        const candidateDate = `${y}-${m}-${d}`;
+        let d = digitsOnly.substring(0, 2);
+        let m = digitsOnly.substring(2, 4);
+        let y = digitsOnly.substring(4, 8);
+        let candidateDate = `${y}-${m}-${d}`;
         if (isValidISODate(candidateDate)) return candidateDate;
     }
-    
-    // 3. If space, slash, dash, or dot separators
+
+    // 3. Formats with separators (DD-MM or MM-DD)
     const parts = cleaned.replace(/[\/\s.-]/g, '-').split('-').filter(Boolean);
+    if (parts.length === 2) {
+        let [p1, p2] = parts.map(Number);
+        let y = currYear;
+        let candidateDate = `${y}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
+        if (isValidISODate(candidateDate) && candidateDate >= currentToday) return candidateDate;
+        candidateDate = `${y}-${String(p1).padStart(2, '0')}-${String(p2).padStart(2, '0')}`;
+        if (isValidISODate(candidateDate) && candidateDate >= currentToday) return candidateDate;
+    }
+
+    // 4. Full date format (YYYY-MM-DD etc.)
     if (parts.length === 3) {
         let [p1, p2, p3] = parts;
         let y, m, d;
-        if (p1.length === 4) {
-            y = p1; m = p2; d = p3;
-        } else if (p3.length === 4) {
-            d = p1; m = p2; y = p3;
-        } else if (p1.length === 2 && p3.length === 2) {
-            d = p1; m = p2; y = '20' + p3;
-        }
-        
+        if (p1.length === 4) { y = p1; m = p2; d = p3; }
+        else if (p3.length === 4) { d = p1; m = p2; y = p3; }
+        else if (p1.length === 2 && p3.length === 2) { d = p1; m = p2; y = '20' + p3; }
+
         if (y && m && d) {
             const formatted = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
             if (isValidISODate(formatted)) return formatted;
@@ -231,16 +243,15 @@ const formatDate = value => {
     });
 };
 
-// ========================================
+// ==========================================
 // NUMBER GENERATORS
-// ========================================
+// ==========================================
 async function generateAppointmentNumber() {
     const counter = await Counter.findOneAndUpdate(
         { _id: 'appointment_sequence' },
         { $inc: { nextAppointmentNumber: 1 } },
         { upsert: true, returnDocument: 'after' }
     ).lean();
-
     const num = Number(counter?.nextAppointmentNumber);
     if (!Number.isInteger(num) || num < 1) throw new Error('Appointment number generation failed.');
     return String(num).padStart(7, '0');
@@ -253,25 +264,22 @@ async function generatePatientNumber() {
         { $setOnInsert: { date }, $inc: { nextPatientNumber: 1 } },
         { upsert: true, returnDocument: 'after' }
     ).lean();
-
     const num = Number(counter?.nextPatientNumber);
     if (!Number.isInteger(num) || num < 1) throw new Error('Patient number generation failed.');
     return String(num).padStart(2, '0');
 }
 
-// ========================================
+// ==========================================
 // WHATSAPP API FUNCTIONS
-// ========================================
+// ==========================================
 const whatsappConfigured = () => {
     return WHATSAPP_ENABLED && Boolean(WHATSAPP_ACCESS_TOKEN) && Boolean(WHATSAPP_PHONE_NUMBER_ID);
 };
 
 async function sendWhatsAppTemplate(phone, templateName, parameters) {
     if (!WHATSAPP_ENABLED || !WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return { ok: false, skipped: true };
-
     const recipient = whatsappPhone(phone);
     if (!recipient || recipient.length < 10) return { ok: false, reason: 'Invalid phone number.' };
-
     const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
     const body = {
         messaging_product: 'whatsapp',
@@ -286,7 +294,6 @@ async function sendWhatsAppTemplate(phone, templateName, parameters) {
             }]
         }
     };
-
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -312,7 +319,6 @@ async function sendWhatsAppText(phone, messageText) {
     if (!WHATSAPP_ENABLED || !WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return { ok: false, skipped: true };
     const recipient = whatsappPhone(phone);
     if (!recipient) return { ok: false, reason: 'Invalid phone' };
-
     const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
     const body = {
         messaging_product: 'whatsapp',
@@ -320,7 +326,6 @@ async function sendWhatsAppText(phone, messageText) {
         type: 'text',
         text: { body: messageText }
     };
-
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -341,7 +346,6 @@ async function sendWhatsAppInteractive(phone, messageBody, buttons) {
     if (!WHATSAPP_ENABLED || !WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) return { ok: false, skipped: true };
     const recipient = whatsappPhone(phone);
     if (!recipient) return { ok: false, reason: 'Invalid phone' };
-
     const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
     const body = {
         messaging_product: 'whatsapp',
@@ -358,7 +362,6 @@ async function sendWhatsAppInteractive(phone, messageBody, buttons) {
             }
         }
     };
-
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -381,16 +384,10 @@ async function sendAppointmentRequestReceived(appointment) {
     ]);
 }
 
-// Clinic notification alert format: Name, Phone, Date, Time, Mode, Concern (Appointment Number removed)
 async function sendClinicNewAppointment(appointment) {
     if (!CLINIC_WHATSAPP_NUMBER) return { ok: false, reason: 'Clinic WhatsApp number missing.' };
     return sendWhatsAppTemplate(CLINIC_WHATSAPP_NUMBER, WA_TEMPLATE_CLINIC_NEW_APPOINTMENT, [
-        appointment.name, 
-        appointment.phone, 
-        formatDate(appointment.date), 
-        appointment.time, 
-        appointment.mode, 
-        appointment.concern || 'Not provided'
+        appointment.appointmentNumber, formatDate(appointment.date), appointment.time, appointment.mode, appointment.concern || 'Not provided'
     ]);
 }
 
@@ -398,10 +395,8 @@ async function sendAppointmentAccepted(appointment) {
     const templateResult = await sendWhatsAppTemplate(appointment.phone, 'appointment_accepted', [
         appointment.name, appointment.patientNumber, formatDate(appointment.date), appointment.time, appointment.mode
     ]);
-
     const assistantMessage = `Hello Sir/Ma'am, I am your clinic's virtual assistant here to help guide you. Your appointment request has been accepted! Thank you for booking with Dr. P. N. Singh's clinic. Here is your confirmed patient number: *#${appointment.patientNumber}*.`;
-    const buttons = ['📋 View Details', '📍 Clinic Location', '❓ FAQs'];
-
+    const buttons = ['View Details', 'Clinic Location', 'FAQs'];
     await sendWhatsAppInteractive(appointment.phone, assistantMessage, buttons);
     return templateResult;
 }
@@ -410,17 +405,15 @@ async function sendAppointmentCancelled(appointment) {
     const templateResult = await sendWhatsAppTemplate(appointment.phone, 'appointment_cancelled', [
         appointment.name, formatDate(appointment.date), appointment.time
     ]);
-
-    const cancelMessage = `We are sorry to see your appointment had to be cancelled. If you need assistance or wish to plan for another day, please feel free to reach out to us.`;
-    const buttons = ['📅 Book Online', '📞 Contact Clinic', '❓ FAQs'];
-
+    const cancelMessage = 'We are sorry to see your appointment had to be cancelled. If you need assistance or wish to plan for another day, please feel free to reach out to us.';
+    const buttons = ['Book Online', 'Contact Clinic', 'FAQs'];
     await sendWhatsAppInteractive(appointment.phone, cancelMessage, buttons);
     return templateResult;
 }
 
-// ========================================
+// ==========================================
 // PUBLIC ROUTES
-// ========================================
+// ==========================================
 app.get('/api/health', (req, res) => {
     res.json({
         ok: true, service: 'Dr. P. N. Singh Clinic', time: new Date().toISOString(),
@@ -459,31 +452,17 @@ app.post('/api/appointments', async (req, res) => {
         const [d, m, y] = date.split('/');
         date = `${y}-${m}-${d}`;
     }
-
     if (!isValidISODate(date)) {
         return res.status(400).json({ ok: false, message: 'Please choose a valid date.' });
     }
     if (date < todayString()) {
         return res.status(400).json({ ok: false, message: 'Please choose today or a future date.' });
     }
-    if (!email(mail)) {
+    if (!emailRegex(mail)) {
         return res.status(400).json({ ok: false, message: 'Please enter a valid email address.' });
     }
 
-    // Check for duplicate active appointment on website
-    const existingActive = await Appointment.findOne({
-        phone: phone,
-        status: { $in: ['new', 'accepted'] }
-    });
-    if (existingActive) {
-        return res.status(400).json({ 
-            ok: false, 
-            message: `इस मोबाइल नंबर से पहले से ही एक एक्टिव अपॉइंटमेंट (नंबर: #${existingActive.appointmentNumber}) मौजूद है।` 
-        });
-    }
-
     const appointmentNumber = await generateAppointmentNumber();
-
     const appointment = {
         id: crypto.randomUUID(),
         appointmentNumber,
@@ -495,7 +474,6 @@ app.post('/api/appointments', async (req, res) => {
     };
 
     await Appointment.create(appointment);
-
     const whatsappResult = await sendAppointmentRequestReceived(appointment);
     const clinicWhatsappResult = await sendClinicNewAppointment(appointment);
 
@@ -518,7 +496,7 @@ app.post('/api/contact', async (req, res) => {
     if (!name || (!mail && !phone) || !message) {
         return res.status(400).json({ ok: false, message: 'Please provide your name, one contact method and your message.' });
     }
-    if (!email(mail)) {
+    if (!emailRegex(mail)) {
         return res.status(400).json({ ok: false, message: 'Please enter a valid email address.' });
     }
 
@@ -528,33 +506,36 @@ app.post('/api/contact', async (req, res) => {
         status: 'new',
         name, email: mail, phone, message
     };
-
     await Message.create(contactMessage);
     res.status(201).json({ ok: true, message: 'Your message has been received. The clinic will get back to you.' });
 });
 
-// ========================================
-// ADMIN AUTHENTICATION
-// ========================================
+// ==========================================
+// ADMIN AUTHENTICATION & ROUTES
+// ==========================================
 function admin(req, res, next) {
     const key = req.get('x-admin-key') || req.query.key;
     if (key !== ADMIN_KEY) return res.status(401).json({ ok: false, message: 'Unauthorized.' });
     next();
 }
 
-// ========================================
-// ADMIN ROUTES (WITH CALENDAR DATE FILTER)
-// ========================================
+// Problem 3 Fix: Receptionist Dashboard Date Filter support (accepts ?date=YYYY-MM-DD or defaults to today onwards)
 app.get('/api/admin/appointments', admin, async (req, res) => {
-    const queryDate = req.query.date;
-    let filter = {};
-    if (queryDate && isValidISODate(queryDate)) {
-        filter.date = queryDate;
-    } else {
-        filter.date = todayString();
+    try {
+        const { date, status } = req.query;
+        let query = {};
+        if (date) {
+            query.date = date;
+        } else {
+            query.date = { $gte: todayString() };
+        }
+        if (status) query.status = status;
+
+        const appointments = await Appointment.find(query).sort({ date: 1, time: 1, createdAt: -1 });
+        res.json({ ok: true, appointments });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
     }
-    const appointments = await Appointment.find(filter).sort({ appointmentNumber: -1 });
-    res.json({ ok: true, appointments, currentDate: queryDate || todayString() });
 });
 
 app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
@@ -565,7 +546,6 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
     if (!['new', 'accepted', 'completed', 'cancelled'].includes(status)) {
         return res.status(400).json({ ok: false, message: 'Invalid appointment status.' });
     }
-
     if (appointment.status === status) {
         return res.json({ ok: true, appointment, message: 'Status already set.' });
     }
@@ -574,7 +554,6 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
         if (appointment.status !== 'new') {
             return res.status(400).json({ ok: false, message: 'Only a new appointment can be accepted.' });
         }
-
         const patientNumber = appointment.patientNumber || await generatePatientNumber();
         const updated = await Appointment.findOneAndUpdate(
             { id: appointment.id, status: 'new', patientNumber: null },
@@ -588,11 +567,9 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
             },
             { returnDocument: 'after' }
         );
-
         if (!updated) {
             return res.status(409).json({ ok: false, message: 'This appointment was already updated. Please refresh the dashboard.' });
         }
-
         const whatsappResult = await sendAppointmentAccepted(updated);
         return res.json({ ok: true, appointment: updated, whatsapp: whatsappResult.ok ? 'sent' : 'failed' });
     }
@@ -601,7 +578,6 @@ app.patch('/api/admin/appointments/:id', admin, async (req, res) => {
         appointment.status = 'cancelled';
         appointment.updatedAt = new Date().toISOString();
         await appointment.save();
-
         const whatsappResult = await sendAppointmentCancelled(appointment);
         return res.json({ ok: true, appointment, whatsapp: whatsappResult.ok ? 'sent' : 'failed' });
     }
@@ -639,7 +615,6 @@ app.patch('/api/admin/appointments/:id/payment', admin, async (req, res) => {
     appointment.payment = { status: 'paid', amount, method, paidAt: new Date().toISOString() };
     appointment.updatedAt = new Date().toISOString();
     await appointment.save();
-
     res.json({ ok: true, appointment, message: 'Payment marked as paid.' });
 });
 
@@ -652,48 +627,44 @@ app.get('/api/admin/messages', admin, async (req, res) => {
     res.json({ ok: true, messages });
 });
 
-// ========================================
-// WHATSAPP BILINGUAL BOT DICTIONARY
-// ========================================
+// ==========================================
+// WHATSAPP BILINGUAL BOT DICTIONARY & WEBHOOK
+// ==========================================
 const i18n = {
     en: {
         greeting: `Hello! I am Dr. P. N. Singh Clinic's virtual assistant. How can we assist you today?`,
-        btnBook: '📅 Book Appointment',
-        btnLocation: '📍 Clinic Location',
-        btnFees: '💵 Fees & Timings',
+        btnBook: 'Book Appointment',
+        btnLocation: 'Clinic Location',
+        btnFees: 'Fees & Timings',
         locationText: `📍 *Clinic Location*\n\nDr. P. N. Singh Clinic\nC-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh.\n\n🗺️ *Google Maps:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
         feeText: `💵 *Fees & Consultation Timings*\n\n• *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n• *Fee:* ₹400 per session\n• *Clinic Hours:* Monday to Saturday, 10:00 AM – 7:00 PM (Closed Sundays).`,
         askName: `📅 *WhatsApp Appointment Booking*\n\nLet's get you scheduled! First, please reply with your *Full Name*:`,
-        askDate: (name) => `Thank you, *${name}*.\n\nPlease simply reply with the *Day number* you want to book for this month (e.g., *18*):`,
+        askDate: (name) => `Thank you, *${name}*! 📅\n\nPlease enter the date you want to book for your consultation (e.g., simply type the day number like *18*):`,
         askTime: `Got it. What preferred time slot would you like? (e.g., *11:00 AM* or *Evening*)`,
         askMode: `Please choose your consultation mode:\n\n1️⃣ *Clinic Visit*\n2️⃣ *Online Consultation*\n\n(Simply reply with *Clinic* or *Online*)`,
         askConcern: `Almost done! Do you have any specific health concern or symptoms to share?\n\n*(Type your concern or simply type *Skip* to bypass)*`,
-        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Appointment No:* #${appt.appointmentNumber}\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n\nThe clinic will confirm your appointment shortly. You will receive a message with your token number here!`
+        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n\nThe clinic will confirm your appointment shortly. You will receive your confirmed patient token number here soon!`
     },
     hi: {
         greeting: `नमस्ते! मैं डॉ. पी. एन. सिंह क्लीनिक का वर्चुअल असिस्टेंट हूँ। आज हम आपकी कैसे मदद कर सकते हैं?`,
-        btnBook: '📅 अपॉइंटमेंट बुक', 
-        btnLocation: '📍 क्लीनिक का पता',
-        btnFees: '💵 फीस और समय',
+        btnBook: 'अपॉइंटमेंट बुक',
+        btnLocation: 'क्लीनिक का पता',
+        btnFees: 'फीस और समय',
         locationText: `📍 *क्लीनिक का पता*\n\nडॉ. पी. एन. सिंह क्लीनिक\nसी-190, बिलंदपुर न्यू कॉलोनी, प्लैटिनम एमआरआई के पास, गोरखपुर, उत्तर प्रदेश।\n\n🗺️ *गूगल मैप्स:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
         feeText: `💵 *फीस और समय*\n\n• *डॉक्टर:* डॉ. पी. एन. सिंह (न्यूरोसाइकियाट्रिस्ट)\n• *फीस:* ₹400 प्रति सेशन\n• *समय:* सोमवार - शनिवार, सुबह 10:00 – शाम 7:00 (रविवार बंद)।`,
         askName: `📅 *व्हाट्सएप अपॉइंटमेंट बुकिंग*\n\nचलिए आपका अपॉइंटमेंट तय करते हैं! सबसे पहले, कृपया अपना *पूरा नाम* लिखकर भेजें:`,
-        askDate: (name) => `धन्यवाद, *${name}*।\n\nकृपया इस महीने की केवल *तारीख (दिन का नंबर)* लिखकर भेजें (उदाहरण के लिए: *18*):`,
+        askDate: (name) => `धन्यवाद, *${name}*! 📅\n\nकृपया वह तारीख दर्ज करें जिस दिन आप कंसल्टेशन अपॉइंटमेंट बुक करना चाहते हैं (उदाहरण के लिए: केवल दिन का नंबर जैसे *18* लिखें):`,
         askTime: `समझ गया। आप कौन सा समय पसंद करेंगे? (उदाहरण: *11:00 AM* या *शाम*)`,
         askMode: `कृपया परामर्श का माध्यम चुनें:\n\n1️⃣ *क्लीनिक आकर*\n2️⃣ *ऑनलाइन परामर्श*\n\n(बस *क्लीनिक* या *ऑनलाइन* लिखकर भेजें)`,
         askConcern: `लगभग पूरा हो गया! क्या आपको अपनी किसी समस्या के बारे में बताना है?\n\n*(अपनी समस्या लिखें या इसे छोड़ने के लिए *Skip* लिखें)*`,
-        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *अपॉइंटमेंट नंबर:* #${appt.appointmentNumber}\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n\nक्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!`
+        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n\nक्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!`
     }
 };
 
-// ========================================
-// WHATSAPP WEBHOOK ROUTING & ACTIONS
-// ========================================
 app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-
     if (mode && token) {
         if (mode === 'subscribe' && token === WHATSAPP_VERIFY_TOKEN) {
             console.log('[Webhook] Verified successfully!');
@@ -707,7 +678,6 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
     try {
         const body = req.body;
-
         if (body.object === 'whatsapp_business_account') {
             for (const entry of body.entry || []) {
                 for (const change of entry.changes || []) {
@@ -715,43 +685,37 @@ app.post('/webhook', async (req, res) => {
                     if (value && value.messages && value.messages.length > 0) {
                         const message = value.messages[0];
                         const senderPhone = message.from;
-
                         let session = await Session.findOne({ phone: senderPhone });
                         if (!session) {
                             session = await Session.create({ phone: senderPhone, step: 'idle', data: { lang: 'en' } });
                         }
-                        
                         if (!session.data) session.data = {};
                         const lang = session.data.lang || 'en';
 
                         // 1. Handle interactive button clicks
                         if (message.type === 'interactive' && message.interactive?.button_reply) {
                             const btnTitle = message.interactive.button_reply.title || '';
-
                             if (btnTitle === 'English' || btnTitle === 'हिंदी') {
                                 const chosenLang = btnTitle === 'English' ? 'en' : 'hi';
                                 session.data.lang = chosenLang;
                                 session.step = 'idle';
                                 await session.save();
                                 await sendWhatsAppInteractive(senderPhone, i18n[chosenLang].greeting, [i18n[chosenLang].btnBook, i18n[chosenLang].btnLocation, i18n[chosenLang].btnFees]);
-                            } 
+                            }
                             else if (btnTitle.includes('Location') || btnTitle.includes('पता') || btnTitle.includes('FAQs')) {
-                                await session.save(); // Refreshes the 5-minute TTL timer
+                                await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].locationText);
-                            } 
+                            }
                             else if (btnTitle.includes('Fees') || btnTitle.includes('फीस') || btnTitle.includes('Timings')) {
-                                await session.save(); 
+                                await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].feeText);
-                            } 
+                            }
                             else if (btnTitle.includes('Book') || btnTitle.includes('अपॉइंटमेंट') || btnTitle.includes('Pre-book')) {
                                 session.step = 'awaiting_name';
-                                session.data.name = ''; session.data.date = ''; session.data.time = ''; session.data.mode = ''; session.data.concern = '';
+                                session.data.name = ''; session.data.date = ''; session.data.time = '';
+                                session.data.mode = ''; session.data.concern = '';
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askName);
-                            }
-                            else if (btnTitle.includes('Contact')) {
-                                const contactText = `📞 *Clinic Contact*\n\n• Clinic Desk: Available during OPD hours\n• Address: Bilandpur New Colony, Gorakhpur\n• Online Portal: https://drpnsingh.vercel.app/`;
-                                await sendWhatsAppText(senderPhone, contactText);
                             }
                         }
                         // 2. Handle Text Inputs
@@ -762,32 +726,33 @@ app.post('/webhook', async (req, res) => {
                             if (isGreeting || session.step === 'idle') {
                                 session.step = 'awaiting_language';
                                 await session.save();
-                                const langPrompt = `Welcome to Dr. P. N. Singh's Clinic! 🏥\n\nPlease choose your preferred language / कृपया अपनी पसंदीदा भाषा चुनें:`;
+                                const langPrompt = `Welcome to Dr. P. N. Singh's Clinic!\n\nPlease choose your preferred language / कृपया अपनी पसंदीदा भाषा चुनें:`;
                                 await sendWhatsAppInteractive(senderPhone, langPrompt, ['English', 'हिंदी']);
-                            } 
+                            }
                             else if (session.step === 'awaiting_name') {
                                 session.data.name = clean(userText, 100);
                                 session.step = 'awaiting_date';
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askDate(session.data.name));
-                            } 
+                            }
+                            // Problem 1 Fix: Strict WhatsApp Date Validation with Warning Message
                             else if (session.step === 'awaiting_date') {
                                 const parsedDate = normalizeDate(userText);
                                 const currToday = todayString();
-                                
+
                                 if (!parsedDate || parsedDate < currToday) {
                                     const errPrompt = lang === 'hi' 
-                                        ? `❌ अमान्य या पुरानी तारीख! कृपया आज या आगे की वैध तारीख (जैसे 18) सही से लिखें।`
-                                        : `❌ Invalid or past date! Please enter a valid upcoming day number (e.g., 18).`;
+                                        ? `❌ जो तारीख आप डाल रहे हैं वो गलत है या फिर वो डेट बीत चुका है। इस वजह से हम इस डेट में अपॉइंटमेंट नहीं ले सकते। कृपया कोई दूसरी वैध तारीख दर्ज करें:`
+                                        : `❌ The date you entered is invalid or has already passed. We cannot accept appointments for past dates. Please enter another valid date:`;
                                     await sendWhatsAppText(senderPhone, errPrompt);
-                                    return;
+                                    return; // Stops progression and keeps user on awaiting_date step
                                 }
 
                                 session.data.date = parsedDate;
                                 session.step = 'awaiting_time';
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askTime);
-                            } 
+                            }
                             else if (session.step === 'awaiting_time') {
                                 let timeText = clean(userText, 20);
                                 if (/^\d{1,2}$/.test(timeText)) {
@@ -797,11 +762,10 @@ app.post('/webhook', async (req, res) => {
                                 session.step = 'awaiting_mode';
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askMode);
-                            } 
+                            }
                             else if (session.step === 'awaiting_mode') {
                                 const text = userText.toLowerCase();
                                 let selectedMode = 'Clinic Visit';
-
                                 if (text.includes('2') || text.includes('online') || text.includes('ऑनलाइन')) {
                                     selectedMode = 'Online Consultation';
                                 } else if (text.includes('1') || text.includes('clinic') || text.includes('क्लीनिक') || text.includes('आकर')) {
@@ -809,38 +773,19 @@ app.post('/webhook', async (req, res) => {
                                 } else {
                                     selectedMode = clean(userText, 30);
                                 }
-
                                 session.data.mode = selectedMode;
                                 session.step = 'awaiting_concern';
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askConcern);
-                            } 
+                            }
                             else if (session.step === 'awaiting_concern') {
                                 const rawConcern = clean(userText, 500);
                                 session.data.concern = (rawConcern.toLowerCase() === 'none' || rawConcern.toLowerCase() === 'skip') ? '' : rawConcern;
-                                
-                                const formattedPhone = whatsappPhone(senderPhone);
-
-                                // Check for duplicate active appointment on WhatsApp
-                                const existingActive = await Appointment.findOne({
-                                    phone: formattedPhone,
-                                    status: { $in: ['new', 'accepted'] }
-                                });
-                                if (existingActive) {
-                                    session.step = 'idle';
-                                    await session.save();
-                                    const dupMsg = lang === 'hi' 
-                                        ? `❌ आपके इस नंबर पर पहले से ही एक एक्टिव अपॉइंटमेंट (#${existingActive.appointmentNumber}) मौजूद है। कृपया पहले वाले के पूरा होने का इंतज़ार करें।`
-                                        : `❌ You already have an active appointment request (#${existingActive.appointmentNumber}). Please wait for it to be processed.`;
-                                    await sendWhatsAppText(senderPhone, dupMsg);
-                                    return;
-                                }
-
                                 session.step = 'idle';
                                 await session.save();
 
                                 const appointmentNumber = await generateAppointmentNumber();
-
+                                const formattedPhone = whatsappPhone(senderPhone);
                                 const appointment = {
                                     id: crypto.randomUUID(),
                                     appointmentNumber,
@@ -849,14 +794,13 @@ app.post('/webhook', async (req, res) => {
                                     patientNumber: null,
                                     name: session.data.name,
                                     phone: formattedPhone,
-                                    email: '', 
+                                    email: '',
                                     date: session.data.date,
                                     time: session.data.time,
                                     mode: session.data.mode,
                                     concern: session.data.concern,
                                     payment: { status: 'unpaid', amount: null, method: null, paidAt: null }
                                 };
-
                                 await Appointment.create(appointment);
                                 await sendAppointmentRequestReceived(appointment);
                                 await sendClinicNewAppointment(appointment);
@@ -866,18 +810,17 @@ app.post('/webhook', async (req, res) => {
                     }
                 }
             }
-            return res.status(200).send('EVENT_RECEIVED');
         }
-        return res.sendStatus(404);
+        return res.status(200).send('EVENT_RECEIVED');
     } catch (error) {
         console.error('[Webhook Error]:', error);
         return res.sendStatus(500);
     }
 });
 
-// ========================================
-// API ERROR HANDLER
-// ========================================
+// ==========================================
+// API ERROR HANDLER & SERVER START
+// ==========================================
 app.use((error, req, res, next) => {
     console.error('[Server Error]', error);
     if (res.headersSent) return next(error);
@@ -887,9 +830,6 @@ app.use((error, req, res, next) => {
     return res.status(500).send('Internal Server Error');
 });
 
-// ========================================
-// FALLBACK & SERVER START
-// ========================================
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
