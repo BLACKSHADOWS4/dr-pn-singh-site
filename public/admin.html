@@ -15,7 +15,7 @@
         .admin-container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
         .controls-card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; gap: 15px; align-items: center; margin-bottom: 25px; flex-wrap: wrap; }
         .controls-card label { font-weight: 600; font-size: 0.95rem; }
-        .controls-card input[type="date"], .controls-card input[type="password"] { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; }
+        .controls-card input[type="date"] { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; }
         .appointment-card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border-left: 5px solid #3b82f6; }
         .appointment-card.accepted { border-left-color: #10b981; }
         .appointment-card.cancelled { border-left-color: #ef4444; }
@@ -35,12 +35,12 @@
 </head>
 <body>
 
-    <!-- ADMIN LOGIN MODAL / VIEW -->
+    <!-- ADMIN LOGIN VIEW -->
     <div id="loginView" class="login-box">
         <h2>Admin Login</h2>
         <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">Enter your admin key to access receptionist dashboard.</p>
         <input type="password" id="adminKeyInput" placeholder="Enter Admin Key" style="width: 100%; box-sizing: border-box; margin-bottom: 15px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
-        <button onclick="handleLogin()" class="btn btn-primary full" style="width: 100%; padding: 12px; background: #1e3a8a; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Login</button>
+        <button onclick="handleLogin()" style="width: 100%; padding: 12px; background: #1e3a8a; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Login</button>
         <p id="loginError" style="color: #ef4444; font-size: 0.85rem; margin-top: 10px;"></p>
     </div>
 
@@ -57,12 +57,12 @@
                     <label for="dateFilter">Select Date: </label>
                     <input type="date" id="dateFilter" onchange="fetchAppointments()">
                 </div>
-                <button onclick="loadToday()" class="btn-action" style="background: #e2e8f0; color: #1e293b;">Today</button>
+                <button onclick="loadToday()" class="btn-action" style="background: #e2e8f0; color: #1e293b; padding: 10px 16px;">Today</button>
                 <div style="margin-left: auto; font-weight: 600; color: #475569;" id="totalCount">Total: 0 appointments</div>
             </div>
 
             <div id="appointmentsList">
-                <!-- Appointments will be loaded here dynamically -->
+                <!-- Appointments loaded dynamically -->
             </div>
         </div>
     </div>
@@ -110,7 +110,6 @@
         document.getElementById('loginView').style.display = 'none';
         document.getElementById('dashboardView').style.display = 'block';
         
-        // Set date filter to today by default if empty
         const dateInput = document.getElementById('dateFilter');
         if (!dateInput.value) {
             const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -125,7 +124,6 @@
         fetchAppointments();
     }
 
-    // Problem 3 Fix: Auto-fetches appointments as soon as date picker changes
     async function fetchAppointments() {
         const selectedDate = document.getElementById('dateFilter').value;
         const listContainer = document.getElementById('appointmentsList');
@@ -200,7 +198,7 @@
             });
             const data = await res.json();
             if (data.ok) {
-                fetchAppointments(); // Refresh the list automatically
+                fetchAppointments();
             } else {
                 alert(data.message || 'Failed to update status.');
             }
