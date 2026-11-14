@@ -8,205 +8,356 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="/styles.css">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 0; }
-        .admin-header { background: #1e3a8a; color: #fff; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
-        .admin-container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
-        .controls-card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; gap: 15px; align-items: center; margin-bottom: 25px; flex-wrap: wrap; }
-        .controls-card label { font-weight: 600; font-size: 0.95rem; }
-        .controls-card input[type="date"] { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; }
-        .appointment-card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border-left: 5px solid #3b82f6; }
-        .appointment-card.accepted { border-left-color: #10b981; }
-        .appointment-card.cancelled { border-left-color: #ef4444; }
-        .row-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
-        .row-info span.label { color: #64748b; font-weight: 500; }
-        .row-info span.val { font-weight: 600; color: #1e293b; }
-        .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; }
-        .badge.new { background: #fef3c7; color: #d97706; }
-        .badge.accepted { background: #d1fae5; color: #059669; }
-        .badge.cancelled { background: #fee2e2; color: #dc2626; }
-        .action-btns { margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end; }
-        .btn-action { padding: 8px 16px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
-        .btn-accept { background: #10b981; color: #fff; }
-        .btn-cancel { background: #ef4444; color: #fff; }
-        .login-box { max-width: 400px; margin: 100px auto; background: #fff; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; }
+        :root {
+            --primary: #1e3a8a;
+            --sage: #059669;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #e2e8f0;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
+        
+        /* Login Screen */
+        .login-box { max-width: 400px; margin: 100px auto; background: var(--card); padding: 35px 25px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); text-align: center; }
+        .login-box h2 { margin: 0 0 8px; color: var(--text); }
+        .login-box p { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
+        .login-input { width: 100%; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 1rem; margin-bottom: 16px; outline: none; }
+        .login-input:focus { border-color: var(--primary); }
+        .login-btn { width: 100%; padding: 13px; background: var(--primary); color: #fff; border: none; border-radius: 10px; font-weight: 600; font-size: 1rem; cursor: pointer; }
+        .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Header */
+        .admin-header { background: var(--card); border-bottom: 1px solid var(--border); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+        .admin-header h2 { margin: 0; font-size: 1.15rem; color: var(--text); display: flex; align-items: center; gap: 8px; }
+        .header-actions { display: flex; gap: 10px; }
+        .btn-outline { background: transparent; border: 1px solid #cbd5e1; color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 0.85rem; }
+
+        /* Container & Filters */
+        .admin-container { max-width: 900px; margin: 20px auto; padding: 0 16px 40px; }
+        .status-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+        .tab-btn { background: var(--card); border: 1px solid var(--border); padding: 12px; border-radius: 10px; font-weight: 500; color: var(--muted); cursor: pointer; text-align: left; font-size: 0.9rem; }
+        .tab-btn.active { border-color: #0f766e; color: #0f766e; background: #f0fdf4; font-weight: 600; }
+
+        .search-bar { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+        .search-bar input { border: none; outline: none; width: 100%; font-size: 0.95rem; background: transparent; }
+
+        .date-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+        .date-row label { font-weight: 500; color: var(--muted); font-size: 0.95rem; }
+        .date-row input[type="date"] { padding: 8px 12px; border: 1px solid #0f172a; border-radius: 8px; font-size: 0.95rem; font-family: inherit; background: var(--card); }
+        .btn-small { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+        .btn-small.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        .count-text { color: var(--muted); font-size: 0.9rem; margin-bottom: 16px; font-weight: 500; }
+
+        /* Appointment Cards (Matches Screenshot Layout) */
+        .appt-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .appt-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        .appt-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .appt-row:first-child { padding-top: 0; }
+        .appt-label { color: #94a3b8; font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        .appt-val { font-weight: 600; color: var(--text); text-align: right; }
+        .appt-id { color: #0f766e; font-weight: 700; font-family: monospace; font-size: 0.95rem; }
+
+        /* Badges */
+        .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
+        .badge.mode { background: #ecfdf5; color: #047857; }
+        .badge.new { background: #fef3c7; color: #b45309; }
+        .badge.accepted { background: #d1fae5; color: #065f46; }
+        .badge.completed { background: #e0e7ff; color: #3730a3; }
+        .badge.cancelled { background: #fee2e2; color: #991b1b; }
+
+        .open-btn { background: var(--card); border: 1px solid #cbd5e1; padding: 6px 16px; border-radius: 8px; font-weight: 600; color: #0f766e; cursor: pointer; font-size: 0.85rem; }
+        .open-btn:hover { background: #f8fafc; }
+
+        /* Action Drawer inside Card */
+        .action-drawer { display: none; margin-top: 14px; padding-top: 14px; border-top: 1px dashed #cbd5e1; background: #f8fafc; padding: 14px; border-radius: 10px; }
+        .action-drawer.show { display: block; }
+        .drawer-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .btn-act { padding: 9px 16px; border-radius: 8px; border: none; font-weight: 600; font-size: 0.85rem; cursor: pointer; color: #fff; }
+        .btn-accept { background: #059669; }
+        .btn-cancel { background: #dc2626; }
+        .btn-complete { background: #2563eb; }
+        .pay-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
+        .pay-box input, .pay-box select { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; }
     </style>
 </head>
 <body>
 
-    <!-- ADMIN LOGIN VIEW -->
+    <!-- 1. LOGIN SCREEN -->
     <div id="loginView" class="login-box">
         <h2>Admin Login</h2>
-        <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">Enter your admin key to access receptionist dashboard.</p>
-        <input type="password" id="adminKeyInput" placeholder="Enter Admin Key" style="width: 100%; box-sizing: border-box; margin-bottom: 15px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
-        <button onclick="handleLogin()" style="width: 100%; padding: 12px; background: #1e3a8a; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Login</button>
-        <p id="loginError" style="color: #ef4444; font-size: 0.85rem; margin-top: 10px;"></p>
+        <p>Enter your admin key to access receptionist dashboard.</p>
+        <form onsubmit="handleLogin(event)">
+            <input type="password" id="adminKeyInput" class="login-input" placeholder="Enter Admin Key" required>
+            <button type="submit" id="loginBtn" class="login-btn">Login</button>
+        </form>
+        <p id="loginError" style="color: #ef4444; font-size: 0.85rem; margin-top: 12px; margin-bottom: 0;"></p>
     </div>
 
-    <!-- DASHBOARD VIEW -->
+    <!-- 2. MAIN RECEPTIONIST DASHBOARD -->
     <div id="dashboardView" style="display: none;">
         <header class="admin-header">
-            <h2 style="margin: 0; font-size: 1.2rem;"><i class="fa-solid fa-hospital-user"></i> Dr. P. N. Singh Clinic - Reception</h2>
-            <button onclick="handleLogout()" style="background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 500;">Logout</button>
+            <h2><i class="fa-solid fa-notes-medical" style="color: #0f766e;"></i> Reception Desk</h2>
+            <div class="header-actions">
+                <button onclick="fetchAppointments()" class="btn-outline"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                <button onclick="handleLogout()" class="btn-outline" style="color: #dc2626; border-color: #fecaca;">Logout</button>
+            </div>
         </header>
 
         <div class="admin-container">
-            <div class="controls-card">
-                <div>
-                    <label for="dateFilter">Select Date: </label>
-                    <input type="date" id="dateFilter" onchange="fetchAppointments()">
-                </div>
-                <button onclick="loadToday()" class="btn-action" style="background: #e2e8f0; color: #1e293b; padding: 10px 16px;">Today</button>
-                <div style="margin-left: auto; font-weight: 600; color: #475569;" id="totalCount">Total: 0 appointments</div>
+            <!-- Status Tabs -->
+            <div class="status-tabs">
+                <button id="tabActive" class="tab-btn active" onclick="setStatusTab('all')">All statuses</button>
+                <button id="tabFinished" class="tab-btn" onclick="setStatusTab('finished')">Finished visits</button>
             </div>
 
-            <div id="appointmentsList">
-                <!-- Appointments loaded dynamically -->
+            <!-- Search Bar -->
+            <div class="search-bar">
+                <i class="fa-solid fa-magnifying-glass" style="color: #94a3b8;"></i>
+                <input type="text" id="searchInput" placeholder="Search patient name or phone" oninput="renderAppointments()">
             </div>
+
+            <!-- Date Picker Filter (Auto-filters immediately on change) -->
+            <div class="date-row">
+                <label for="dateFilter">Date:</label>
+                <input type="date" id="dateFilter" onchange="onDateChange()">
+                <button type="button" id="btnAllDates" class="btn-small active" onclick="clearDateFilter()">All Upcoming</button>
+                <button type="button" id="btnToday" class="btn-small" onclick="setTodayFilter()">Today</button>
+            </div>
+
+            <div class="count-text" id="totalCount">0 appointments</div>
+
+            <!-- Appointments List -->
+            <div id="appointmentsList"></div>
         </div>
     </div>
 
 <script>
     let adminKey = localStorage.getItem('drpn_admin_key') || '';
+    let allAppointments = [];
+    let currentTab = 'all'; // 'all' or 'finished'
 
     window.addEventListener('DOMContentLoaded', () => {
         if (adminKey) {
-            verifyAndOpenDashboard();
+            verifyKeyAndLoad(adminKey, true);
         }
     });
 
-    async function handleLogin() {
+    async function handleLogin(e) {
+        e.preventDefault();
         const key = document.getElementById('adminKeyInput').value.trim();
         if (!key) return;
+        await verifyKeyAndLoad(key, false);
+    }
+
+    // Directly verifies key against existing /api/admin/appointments in your working server.js
+    async function verifyKeyAndLoad(key, isAuto) {
+        const loginBtn = document.getElementById('loginBtn');
+        const errEl = document.getElementById('loginError');
+        if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = 'Checking...'; }
+        if (errEl) errEl.textContent = '';
 
         try {
-            const res = await fetch('/api/admin/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key })
+            const res = await fetch('/api/admin/appointments', {
+                headers: { 'x-admin-key': key }
             });
+
+            if (res.status === 401) {
+                localStorage.removeItem('drpn_admin_key');
+                adminKey = '';
+                if (!isAuto && errEl) errEl.textContent = 'Invalid Admin Key! Please enter the correct key.';
+                document.getElementById('loginView').style.display = 'block';
+                document.getElementById('dashboardView').style.display = 'none';
+                return;
+            }
+
             const data = await res.json();
-            if (data.success) {
+            if (res.ok && data.ok) {
                 adminKey = key;
                 localStorage.setItem('drpn_admin_key', key);
-                verifyAndOpenDashboard();
+                allAppointments = data.appointments || [];
+                document.getElementById('loginView').style.display = 'none';
+                document.getElementById('dashboardView').style.display = 'block';
+                renderAppointments();
             } else {
-                document.getElementById('loginError').textContent = 'Invalid Admin Key!';
+                if (errEl) errEl.textContent = data.message || 'Server error occurred.';
             }
         } catch (err) {
-            document.getElementById('loginError').textContent = 'Connection error.';
+            if (errEl) errEl.textContent = 'Network or database error. Please try again.';
+        } finally {
+            if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'Login'; }
         }
     }
 
     function handleLogout() {
         localStorage.removeItem('drpn_admin_key');
         adminKey = '';
+        document.getElementById('adminKeyInput').value = '';
         document.getElementById('dashboardView').style.display = 'none';
         document.getElementById('loginView').style.display = 'block';
     }
 
-    function verifyAndOpenDashboard() {
-        document.getElementById('loginView').style.display = 'none';
-        document.getElementById('dashboardView').style.display = 'block';
-        
-        const dateInput = document.getElementById('dateFilter');
-        if (!dateInput.value) {
-            const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-            dateInput.value = todayIso;
-        }
-        fetchAppointments();
-    }
-
-    function loadToday() {
-        const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-        document.getElementById('dateFilter').value = todayIso;
-        fetchAppointments();
-    }
-
     async function fetchAppointments() {
-        const selectedDate = document.getElementById('dateFilter').value;
         const listContainer = document.getElementById('appointmentsList');
-        listContainer.innerHTML = '<p style="text-align: center; color: #64748b;">Loading appointments...</p>';
-
+        listContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 20px;">Loading appointments...</p>';
         try {
-            const res = await fetch(`/api/admin/appointments?date=${selectedDate}`, {
+            const res = await fetch('/api/admin/appointments', {
                 headers: { 'x-admin-key': adminKey }
             });
-            const data = await res.json();
-
-            if (!data.ok) {
-                listContainer.innerHTML = `<p style="text-align: center; color: #ef4444;">Error: ${data.message || 'Unauthorized'}</p>`;
-                if (res.status === 401) handleLogout();
+            if (res.status === 401) {
+                handleLogout();
                 return;
             }
-
-            const appointments = data.appointments || [];
-            document.getElementById('totalCount').textContent = `Total: ${appointments.length} appointments`;
-
-            if (appointments.length === 0) {
-                listContainer.innerHTML = '<div style="background: #fff; padding: 30px; border-radius: 12px; text-align: center; color: #64748b;">No appointments found for this date.</div>';
-                return;
-            }
-
-            let html = '';
-            appointments.forEach(appt => {
-                const statusClass = appt.status === 'accepted' ? 'accepted' : (appt.status === 'cancelled' ? 'cancelled' : '');
-                html += `
-                    <div class="appointment-card ${statusClass}">
-                        <div class="row-info"><span class="label">APPOINTMENT ID</span><span class="val">#${appt.appointmentNumber || 'N/A'}</span></div>
-                        <div class="row-info"><span class="label">PATIENT NO.</span><span class="val">${appt.patientNumber ? '#' + appt.patientNumber : '—'}</span></div>
-                        <div class="row-info"><span class="label">PATIENT NAME</span><span class="val">${appt.name}</span></div>
-                        <div class="row-info"><span class="label">PHONE</span><span class="val"><a href="tel:${appt.phone}" style="color: #2563eb; text-decoration: none;">${appt.phone}</a></span></div>
-                        <div class="row-info"><span class="label">DATE & TIME</span><span class="val">${appt.date} at ${appt.time}</span></div>
-                        <div class="row-info"><span class="label">MODE</span><span class="val">${appt.mode}</span></div>
-                        <div class="row-info"><span class="label">STATUS</span><span class="val"><span class="badge ${appt.status}">${appt.status}</span></span></div>
-                        <div class="row-info"><span class="label">EMAIL</span><span class="val">${appt.email || '—'}</span></div>
-                        ${appt.concern ? `<div class="row-info"><span class="label">CONCERN</span><span class="val">${appt.concern}</span></div>` : ''}
-                        
-                        <div class="action-btns">
-                            ${appt.status === 'new' ? `
-                                <button onclick="updateStatus('${appt.id}', 'accepted')" class="btn-action btn-accept">Accept & Assign Token</button>
-                                <button onclick="updateStatus('${appt.id}', 'cancelled')" class="btn-action btn-cancel">Cancel</button>
-                            ` : ''}
-                            ${appt.status === 'accepted' ? `
-                                <span style="color: #059669; font-weight: 600; align-self: center; font-size: 0.9rem;"><i class="fa-solid fa-check-circle"></i> Active & Token Assigned</span>
-                                <button onclick="updateStatus('${appt.id}', 'cancelled')" class="btn-action btn-cancel" style="padding: 6px 12px; font-size: 0.8rem;">Cancel</button>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            });
-            listContainer.innerHTML = html;
-
-        } catch (err) {
-            listContainer.innerHTML = '<p style="text-align: center; color: #ef4444;">Failed to load appointments. Please check connection.</p>';
-        }
-    }
-
-    async function updateStatus(id, status) {
-        if (!confirm(`Are you sure you want to mark this appointment as ${status}?`)) return;
-
-        try {
-            const res = await fetch(`/api/admin/appointments/${id}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-admin-key': adminKey
-                },
-                body: JSON.stringify({ status })
-            });
             const data = await res.json();
             if (data.ok) {
-                fetchAppointments();
-            } else {
-                alert(data.message || 'Failed to update status.');
+                allAppointments = data.appointments || [];
+                renderAppointments();
             }
         } catch (err) {
-            alert('Network error while updating status.');
+            listContainer.innerHTML = '<p style="text-align: center; color: #ef4444;">Failed to load appointments.</p>';
         }
     }
-</script>
 
-</body>
-</html>
+    function setStatusTab(tab) {
+        currentTab = tab;
+        document.getElementById('tabActive').classList.toggle('active', tab === 'all');
+        document.getElementById('tabFinished').classList.toggle('active', tab === 'finished');
+        renderAppointments();
+    }
+
+    function onDateChange() {
+        const val = document.getElementById('dateFilter').value;
+        document.getElementById('btnAllDates').classList.toggle('active', !val);
+        const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        document.getElementById('btnToday').classList.toggle('active', val === todayIso);
+        renderAppointments();
+    }
+
+    function clearDateFilter() {
+        document.getElementById('dateFilter').value = '';
+        onDateChange();
+    }
+
+    function setTodayFilter() {
+        const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        document.getElementById('dateFilter').value = todayIso;
+        onDateChange();
+    }
+
+    function formatDisplayDate(isoStr) {
+        if (!isoStr) return '—';
+        const parts = isoStr.split('-');
+        if (parts.length !== 3) return isoStr;
+        const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    // Instant Client-Side Filter (Works for Date 15/11/2026, Search, and Status Tabs automatically)
+    function renderAppointments() {
+        const selectedDate = document.getElementById('dateFilter').value; // YYYY-MM-DD
+        const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+        const listContainer = document.getElementById('appointmentsList');
+
+        const filtered = allAppointments.filter(appt => {
+            // 1. Tab filter
+            if (currentTab === 'finished') {
+                if (appt.status !== 'completed' && appt.status !== 'cancelled') return false;
+            }
+
+            // 2. Strict Date Filter (When receptionist selects a date like 15/11/2026)
+            if (selectedDate && appt.date !== selectedDate) {
+                return false;
+            }
+
+            // 3. Search Filter (Name, Phone, or Appointment ID)
+            if (searchQuery) {
+                const nameMatch = (appt.name || '').toLowerCase().includes(searchQuery);
+                const phoneMatch = (appt.phone || '').toLowerCase().includes(searchQuery);
+                const idMatch = (appt.appointmentNumber || '').toLowerCase().includes(searchQuery);
+                if (!nameMatch && !phoneMatch && !idMatch) return false;
+            }
+
+            return true;
+        });
+
+        document.getElementById('totalCount').textContent = `${filtered.length} appointment${filtered.length === 1 ? '' : 's'}`;
+
+        if (filtered.length === 0) {
+            listContainer.innerHTML = `<div style="background: #fff; padding: 35px 20px; border-radius: 12px; text-align: center; color: #64748b; border: 1px solid #e2e8f0;">No appointments found${selectedDate ? ' for ' + formatDisplayDate(selectedDate) : ''}.</div>`;
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(appt => {
+            const statusLabel = (appt.status || 'new').charAt(0).toUpperCase() + (appt.status || 'new').slice(1);
+            const isPaid = appt.payment && appt.payment.status === 'paid';
+
+            html += `
+                <div class="appt-card">
+                    <div class="appt-row">
+                        <span class="appt-label">APPOINTMENT ID</span>
+                        <span class="appt-id">${appt.appointmentNumber || '—'}</span>
+                    </div>
+                    <div class="appt-row">
+                        <span class="appt-label">PATIENT NO.</span>
+                        <span class="appt-val">${appt.patientNumber || '—'}</span>
+                    </div>
+                    <div class="appt-row">
+                        <span class="appt-label">PATIENT NAME</span>
+                        <span class="appt-val">${appt.name || '—'}</span>
+                    </div>
+                    <div class="appt-row">
+                        <span class="appt-label">PHONE</span>
+                        <span class="appt-val"><a href="tel:${appt.phone}" style="color: inherit; text-decoration: none;">${appt.phone || '—'}</a></span>
+                    </div>
+                    <div class="appt-row">
+                        <span class="appt-label">DATE & TIME</span>
+                        <span class="appt-val">${formatDisplayDate(appt.date)} &nbsp; ${appt.time || ''}</span>
+                    </div>
+                    <div class="appt-row">
+                        <span class="appt-label">MODE</span>
+                        <span class="appt-val"><span class="badge mode">${appt.mode || 'Clinic'}</span></span>
+                    </div>
+                    <div class="appt-row">
+                        <span class="appt-label">STATUS</span>
+                        <span class="appt-val"><span class="badge ${appt.status}">● ${statusLabel}</span></span>
+                    </div>
+                    <div class="appt-row">
+                        <span class="appt-label">EMAIL</span>
+                        <span class="appt-val">${appt.email || '—'}</span>
+                    </div>
+                    <div class="appt-row">
+                        <span class="appt-label">ACTION</span>
+                        <span class="appt-val">
+                            <button type="button" class="open-btn" onclick="toggleDrawer('${appt.id}')">Open</button>
+                        </span>
+                    </div>
+
+                    <!-- Hidden Action Drawer opened by clicking "Open" -->
+                    <div id="drawer_${appt.id}" class="action-drawer">
+                        <div style="font-size: 0.85rem; color: #475569; margin-bottom: 8px;">
+                            <strong>Concern:</strong> ${appt.concern || 'None'} <br>
+                            <strong>Payment:</strong> ${isPaid ? `<span style="color:#059669;font-weight:600;">Paid (₹${appt.payment.amount} via ${appt.payment.method.toUpperCase()})</span>` : '<span style="color:#d97706;font-weight:600;">Unpaid</span>'}
+                        </div>
+
+                        <div class="drawer-btns">
+                            ${appt.status === 'new' ? `
+                                <button onclick="updateStatus('${appt.id}', 'accepted')" class="btn-act btn-accept">✓ Accept & Assign Token</button>
+                                <button onclick="updateStatus('${appt.id}', 'cancelled')" class="btn-act btn-cancel">✕ Cancel</button>
+                            ` : ''}
+
+                            ${appt.status === 'accepted' ? `
+                                <button onclick="updateStatus('${appt.id}', 'completed')" class="btn-act btn-complete" ${!isPaid ? 'title="Mark payment as paid first"' : ''}>✓ Mark Completed</button>
+                                <button onclick="updateStatus('${appt.id}', 'cancelled')" class="btn-act btn-cancel">✕ Cancel</button>
+                            ` : ''}
+                        </div>
+
+                        ${appt.status === 'accepted' && !isPaid ? `
+                            <div class="pay-box">
+                                <span style="font-size: 0.85rem; font-weight: 600;">Record Payment:</span>
+                                <input type="number" id="amt_${appt.id}" value="400" style="width: 80px;">
+        
