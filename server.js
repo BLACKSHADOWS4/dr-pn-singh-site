@@ -180,13 +180,11 @@ const isValidISODate = value => {
            date.getUTCDate() === day;
 };
 
-// Smart Date Normalization for WhatsApp (Locks year, allows flexible months/days, auto-rolls next month if day passed)
 function normalizeDate(text) {
     const cleaned = String(text || '').trim();
     const currentToday = todayString();
     const [currYear, currMonth, currDay] = currentToday.split('-').map(Number);
 
-    // 1. If user types just day number (e.g. "18" or "5")
     if (/^\d{1,2}$/.test(cleaned)) {
         let dayNum = Number(cleaned);
         let m = currMonth;
@@ -199,7 +197,6 @@ function normalizeDate(text) {
         if (isValidISODate(candidateDate) && candidateDate >= currentToday) return candidateDate;
     }
 
-    // 2. 8 digits without separators (DDMMYYYY)
     let digitsOnly = cleaned.replace(/\D/g, '');
     if (digitsOnly.length === 8) {
         let d = digitsOnly.substring(0, 2);
@@ -209,7 +206,6 @@ function normalizeDate(text) {
         if (isValidISODate(candidateDate)) return candidateDate;
     }
 
-    // 3. Formats with separators (DD-MM or MM-DD)
     const parts = cleaned.replace(/[\/\s.-]/g, '-').split('-').filter(Boolean);
     if (parts.length === 2) {
         let [p1, p2] = parts.map(Number);
@@ -220,7 +216,6 @@ function normalizeDate(text) {
         if (isValidISODate(candidateDate) && candidateDate >= currentToday) return candidateDate;
     }
 
-    // 4. Full date format (YYYY-MM-DD etc.)
     if (parts.length === 3) {
         let [p1, p2, p3] = parts;
         let y, m, d;
@@ -247,7 +242,9 @@ const formatDate = value => {
     });
 };
 
-// Check if phone number already has an active upcoming appointment
+// ==========================================
+// DUPLICATE APPOINTMENT CHECKER
+// ==========================================
 async function findActiveAppointmentByPhone(rawPhone) {
     const digits = String(rawPhone ?? '').replace(/\D/g, '').slice(-10);
     if (digits.length !== 10) return null;
@@ -405,7 +402,6 @@ async function sendAppointmentRequestReceived(appointment) {
     ]);
 }
 
-// Fixed: Sends all 6 parameters required by clinic_new_appointment template
 async function sendClinicNewAppointment(appointment) {
     if (!CLINIC_WHATSAPP_NUMBER) return { ok: false, reason: 'Clinic WhatsApp number missing.' };
     return sendWhatsAppTemplate(CLINIC_WHATSAPP_NUMBER, WA_TEMPLATE_CLINIC_NEW_APPOINTMENT, [
@@ -502,7 +498,8 @@ app.post('/api/appointments', async (req, res) => {
     if (!emailRegex(mail)) {
         return res.status(400).json({ ok: false, message: 'Please enter a valid email address.' });
     }
-    // Duplicate Phone Check for Website Booking
+    
+    // Website Duplicate Check
     const existingAppt = await findActiveAppointmentByPhone(phone);
     if (existingAppt) {
         return res.status(409).json({
@@ -782,7 +779,17 @@ app.post('/webhook', async (req, res) => {
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].feeText);
                             }
+                            // YOUR FIX ADDED HERE (Button Click Check)
                             else if (btnTitle.includes('Book') || btnTitle.includes('अपॉइंटमेंट') || btnTitle.includes('Pre-book')) {
+                                const existingAppt = await findActiveAppointmentByPhone(senderPhone);
+                                if (existingAppt) {
+                                    const dupMsg = lang === 'hi'
+                                        ? `⚠️ *अपॉइंटमेंट पहले से बुक है!*\n\nआपके इस नंबर से *${formatDate(existingAppt.date)}* को *${existingAppt.time}* के लिए पहले से एक अपॉइंटमेंट दर्ज है।\n\nएक मोबाइल नंबर से एक समय में एक ही अपॉइंटमेंट बुक किया जा सकता है।`
+                                        : `⚠️ *Appointment Already Booked!*\n\nYou already have an active appointment linked to this number for *${formatDate(existingAppt.date)}* at *${existingAppt.time}*.\n\nOnly one active appointment is allowed per mobile number.`;
+                                    await sendWhatsAppText(senderPhone, dupMsg);
+                                    return res.status(200).send('EVENT_RECEIVED');
+                                }
+
                                 session.step = 'awaiting_name';
                                 session.data.name = '';
                                 session.data.date = '';
@@ -810,7 +817,6 @@ app.post('/webhook', async (req, res) => {
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askDate(session.data.name));
                             }
-                            // Strict WhatsApp Date Validation without Infinite Retries
                             else if (session.step === 'awaiting_date') {
                                 const parsedDate = normalizeDate(userText);
                                 const currToday = todayString();
@@ -856,6 +862,19 @@ app.post('/webhook', async (req, res) => {
                             else if (session.step === 'awaiting_concern') {
                                 const rawConcern = clean(userText, 500);
                                 session.data.concern = (rawConcern.toLowerCase() === 'none' || rawConcern.toLowerCase() === 'skip') ? '' : rawConcern;
+                                
+                                // SECOND SAFETY CHECK (Before saving to DB)
+                                const finalCheckAppt = await findActiveAppointmentByPhone(senderPhone);
+                                if (finalCheckAppt) {
+                                    const dupMsg = lang === 'hi'
+                                        ? `⚠️ *अपॉइंटमेंट पहले से बुक है!*\n\nआपके इस नंबर से *${formatDate(finalCheckAppt.date)}* को पहले से एक अपॉइंटमेंट दर्ज है।`
+                                        : `⚠️ *Appointment Already Booked!*\n\nYou already have an active appointment linked to this number for *${formatDate(finalCheckAppt.date)}*.`;
+                                    await sendWhatsAppText(senderPhone, dupMsg);
+                                    session.step = 'idle';
+                                    await session.save();
+                                    return res.status(200).send('EVENT_RECEIVED');
+                                }
+
                                 session.step = 'idle';
                                 await session.save();
 
