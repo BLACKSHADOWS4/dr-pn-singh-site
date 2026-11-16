@@ -502,6 +502,14 @@ app.post('/api/appointments', async (req, res) => {
     if (!emailRegex(mail)) {
         return res.status(400).json({ ok: false, message: 'Please enter a valid email address.' });
     }
+    // Duplicate Phone Check for Website Booking
+    const existingAppt = await findActiveAppointmentByPhone(phone);
+    if (existingAppt) {
+        return res.status(409).json({
+            ok: false,
+            message: `An active appointment is already booked with this mobile number for ${formatDate(existingAppt.date)} at ${existingAppt.time}.`
+        });
+    }
 
     const appointmentNumber = await generateAppointmentNumber();
     const appointment = {
