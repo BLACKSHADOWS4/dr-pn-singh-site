@@ -25,7 +25,7 @@ async function connectToDatabase() {
     }
 }
 
-// Middleware to connect before API routes
+// Middleware to connect before API and Webhook routes
 app.use(async (req, res, next) => {
     if (req.path.startsWith('/api') && req.path !== '/api/admin/login') {
         try {
@@ -33,8 +33,12 @@ app.use(async (req, res, next) => {
         } catch (err) {
             return res.status(500).json({ ok: false, message: 'Database connection failed on server.' });
         }
-    } else if (req.path.startsWith('/webhook')) {
-        connectToDatabase().catch(err => console.error('[Webhook DB Warning]:', err));
+    } else if (req.path.startsWith('/webhook') && req.method === 'POST') {
+        try {
+            await connectToDatabase();
+        } catch (err) {
+            console.error('[Webhook DB Warning]:', err);
+        }
     }
     next();
 });
@@ -290,7 +294,10 @@ async function sendWhatsAppTemplate(phone, templateName, parameters) {
             language: { code: WA_TEMPLATE_LANGUAGE },
             components: [{
                 type: 'body',
-                parameters: parameters.map(value => ({ type: 'text', text: String(value ?? '') }))
+                parameters: parameters.map(value => ({
+                    type: 'text',
+                    text: String(value || 'Not provided').replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim() || 'Not provided'
+                }))
             }]
         }
     };
@@ -380,20 +387,33 @@ async function sendWhatsAppInteractive(phone, messageBody, buttons) {
 
 async function sendAppointmentRequestReceived(appointment) {
     return sendWhatsAppTemplate(appointment.phone, WA_TEMPLATE_REQUEST_RECEIVED, [
-        appointment.name, formatDate(appointment.date), appointment.time, appointment.mode
+        appointment.name,
+        formatDate(appointment.date),
+        appointment.time,
+        appointment.mode
     ]);
 }
 
+// Fixed: Sends all 6 parameters required by clinic_new_appointment template
 async function sendClinicNewAppointment(appointment) {
     if (!CLINIC_WHATSAPP_NUMBER) return { ok: false, reason: 'Clinic WhatsApp number missing.' };
     return sendWhatsAppTemplate(CLINIC_WHATSAPP_NUMBER, WA_TEMPLATE_CLINIC_NEW_APPOINTMENT, [
-        appointment.appointmentNumber, formatDate(appointment.date), appointment.time, appointment.mode, appointment.concern || 'Not provided'
+        appointment.name,
+        appointment.phone,
+        formatDate(appointment.date),
+        appointment.time,
+        appointment.mode,
+        appointment.concern || 'Not provided'
     ]);
 }
 
 async function sendAppointmentAccepted(appointment) {
     const templateResult = await sendWhatsAppTemplate(appointment.phone, 'appointment_accepted', [
-        appointment.name, appointment.patientNumber, formatDate(appointment.date), appointment.time, appointment.mode
+        appointment.name,
+        appointment.patientNumber,
+        formatDate(appointment.date),
+        appointment.time,
+        appointment.mode
     ]);
     const assistantMessage = `Hello Sir/Ma'am, I am your clinic's virtual assistant here to help guide you. Your appointment request has been accepted! Thank you for booking with Dr. P. N. Singh's clinic. Here is your confirmed patient number: *#${appointment.patientNumber}*.`;
     const buttons = ['View Details', 'Clinic Location', 'FAQs'];
@@ -403,7 +423,9 @@ async function sendAppointmentAccepted(appointment) {
 
 async function sendAppointmentCancelled(appointment) {
     const templateResult = await sendWhatsAppTemplate(appointment.phone, 'appointment_cancelled', [
-        appointment.name, formatDate(appointment.date), appointment.time
+        appointment.name,
+        formatDate(appointment.date),
+        appointment.time
     ]);
     const cancelMessage = 'We are sorry to see your appointment had to be cancelled. If you need assistance or wish to plan for another day, please feel free to reach out to us.';
     const buttons = ['Book Online', 'Contact Clinic', 'FAQs'];
@@ -416,17 +438,25 @@ async function sendAppointmentCancelled(appointment) {
 // ==========================================
 app.get('/api/health', (req, res) => {
     res.json({
-        ok: true, service: 'Dr. P. N. Singh Clinic', time: new Date().toISOString(),
+        ok: true,
+        service: 'Dr. P. N. Singh Clinic',
+        time: new Date().toISOString(),
         whatsapp: whatsappConfigured() ? 'configured' : 'not configured'
     });
 });
 
 app.get('/api/clinic', (req, res) => {
     res.json({
-        doctor: 'Dr. P. N. Singh', specialty: 'Neuropsychiatrist', tagline: 'Better Mental Health, Better Quality of Life.',
-        consultationFee: 400, address: 'C-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh',
-        phone: CLINIC_PHONE, email: CLINIC_EMAIL, whatsapp: CLINIC_WHATSAPP_NUMBER,
-        upiId: CLINIC_UPI_ID, paymentName: CLINIC_PAYMENT_NAME
+        doctor: 'Dr. P. N. Singh',
+        specialty: 'Neuropsychiatrist',
+        tagline: 'Better Mental Health, Better Quality of Life.',
+        consultationFee: 400,
+        address: 'C-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh',
+        phone: CLINIC_PHONE,
+        email: CLINIC_EMAIL,
+        whatsapp: CLINIC_WHATSAPP_NUMBER,
+        upiId: CLINIC_UPI_ID,
+        paymentName: CLINIC_PAYMENT_NAME
     });
 });
 
@@ -469,7 +499,13 @@ app.post('/api/appointments', async (req, res) => {
         createdAt: new Date().toISOString(),
         status: 'new',
         patientNumber: null,
-        name, phone, email: mail, date, time, mode, concern,
+        name,
+        phone,
+        email: mail,
+        date,
+        time,
+        mode,
+        concern,
         payment: { status: 'unpaid', amount: null, method: null, paidAt: null }
     };
 
@@ -482,7 +518,10 @@ app.post('/api/appointments', async (req, res) => {
         message: 'Your appointment request has been received. The clinic will confirm the appointment.',
         appointmentId: appointment.id,
         appointmentNumber: appointment.appointmentNumber,
-        whatsapp: { patient: whatsappResult.ok ? 'sent' : 'failed', clinic: clinicWhatsappResult.ok ? 'sent' : 'failed' }
+        whatsapp: {
+            patient: whatsappResult.ok ? 'sent' : 'failed',
+            clinic: clinicWhatsappResult.ok ? 'sent' : 'failed'
+        }
     });
 });
 
@@ -504,7 +543,10 @@ app.post('/api/contact', async (req, res) => {
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
         status: 'new',
-        name, email: mail, phone, message
+        name,
+        email: mail,
+        phone,
+        message
     };
     await Message.create(contactMessage);
     res.status(201).json({ ok: true, message: 'Your message has been received. The clinic will get back to you.' });
@@ -519,7 +561,14 @@ function admin(req, res, next) {
     next();
 }
 
-// Problem 3 Fix: Receptionist Dashboard Date Filter support (accepts ?date=YYYY-MM-DD or defaults to today onwards)
+app.post('/api/admin/login', (req, res) => {
+    const { key } = req.body || {};
+    if (key === ADMIN_KEY) {
+        return res.json({ ok: true, success: true, token: 'authenticated' });
+    }
+    return res.status(401).json({ ok: false, success: false, error: 'Invalid admin key' });
+});
+
 app.get('/api/admin/appointments', admin, async (req, res) => {
     try {
         const { date, status } = req.query;
@@ -700,7 +749,11 @@ app.post('/webhook', async (req, res) => {
                                 session.data.lang = chosenLang;
                                 session.step = 'idle';
                                 await session.save();
-                                await sendWhatsAppInteractive(senderPhone, i18n[chosenLang].greeting, [i18n[chosenLang].btnBook, i18n[chosenLang].btnLocation, i18n[chosenLang].btnFees]);
+                                await sendWhatsAppInteractive(senderPhone, i18n[chosenLang].greeting, [
+                                    i18n[chosenLang].btnBook,
+                                    i18n[chosenLang].btnLocation,
+                                    i18n[chosenLang].btnFees
+                                ]);
                             }
                             else if (btnTitle.includes('Location') || btnTitle.includes('पता') || btnTitle.includes('FAQs')) {
                                 await session.save();
@@ -712,8 +765,11 @@ app.post('/webhook', async (req, res) => {
                             }
                             else if (btnTitle.includes('Book') || btnTitle.includes('अपॉइंटमेंट') || btnTitle.includes('Pre-book')) {
                                 session.step = 'awaiting_name';
-                                session.data.name = ''; session.data.date = ''; session.data.time = '';
-                                session.data.mode = ''; session.data.concern = '';
+                                session.data.name = '';
+                                session.data.date = '';
+                                session.data.time = '';
+                                session.data.mode = '';
+                                session.data.concern = '';
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askName);
                             }
@@ -735,19 +791,17 @@ app.post('/webhook', async (req, res) => {
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askDate(session.data.name));
                             }
-                            // Problem 1 Fix: Strict WhatsApp Date Validation without Infinite Retries
+                            // Strict WhatsApp Date Validation without Infinite Retries
                             else if (session.step === 'awaiting_date') {
                                 const parsedDate = normalizeDate(userText);
                                 const currToday = todayString();
 
                                 if (!parsedDate || parsedDate < currToday) {
-                                    const errPrompt = lang === 'hi' 
+                                    const errPrompt = lang === 'hi'
                                         ? `❌ जो तारीख आप डाल रहे हैं वो गलत है या फिर वो डेट बीत चुका है। कृपया कोई दूसरी वैध तारीख दर्ज करें:`
                                         : `❌ The date you entered is invalid or has already passed. Please enter another valid date:`;
                                     await sendWhatsAppText(senderPhone, errPrompt);
-                                    
-                                    // यह लाइन WhatsApp को बताएगी कि एरर मैसेज भेज दिया गया है, ताकि वो बार-बार मैसेज न भेजे
-                                    return res.status(200).send('EVENT_RECEIVED'); 
+                                    return res.status(200).send('EVENT_RECEIVED');
                                 }
 
                                 session.data.date = parsedDate;
@@ -755,7 +809,6 @@ app.post('/webhook', async (req, res) => {
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askTime);
                             }
-
                             else if (session.step === 'awaiting_time') {
                                 let timeText = clean(userText, 20);
                                 if (/^\d{1,2}$/.test(timeText)) {
