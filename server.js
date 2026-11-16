@@ -247,6 +247,17 @@ const formatDate = value => {
     });
 };
 
+// Check if phone number already has an active upcoming appointment
+async function findActiveAppointmentByPhone(rawPhone) {
+    const digits = String(rawPhone ?? '').replace(/\D/g, '').slice(-10);
+    if (digits.length !== 10) return null;
+    return Appointment.findOne({
+        phone: { $regex: `${digits}$` },
+        date: { $gte: todayString() },
+        status: { $in: ['new', 'accepted'] }
+    }).lean();
+}
+
 // ==========================================
 // NUMBER GENERATORS
 // ==========================================
