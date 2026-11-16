@@ -223,8 +223,8 @@
                     <label>Consultation mode
                         <select name="mode" required>
                             <option value="">Choose</option>
-                            <option>In-clinic</option>
-                            <option>Online</option>
+                            <option value="In-clinic">In-clinic</option>
+                            <option value="Online">Online</option>
                         </select>
                     </label>
                     <label>Date
@@ -233,13 +233,13 @@
                     <label>Preferred time
                         <select name="time" required>
                             <option value="">Choose</option>
-                            <option>10:00 AM</option>
-                            <option>11:00 AM</option>
-                            <option>12:00 PM</option>
-                            <option>4:00 PM</option>
-                            <option>5:00 PM</option>
-                            <option>6:00 PM</option>
-                            <option>7:00 PM</option>
+                            <option value="10:00 AM">10:00 AM</option>
+                            <option value="11:00 AM">11:00 AM</option>
+                            <option value="12:00 PM">12:00 PM</option>
+                            <option value="4:00 PM">4:00 PM</option>
+                            <option value="5:00 PM">5:00 PM</option>
+                            <option value="6:00 PM">6:00 PM</option>
+                            <option value="7:00 PM">7:00 PM</option>
                         </select>
                     </label>
                 </div>
@@ -374,8 +374,8 @@
                 <label>Consultation mode
                     <select name="mode" required>
                         <option value="">Choose</option>
-                        <option>In-clinic</option>
-                        <option>Online</option>
+                        <option value="In-clinic">In-clinic</option>
+                        <option value="Online">Online</option>
                     </select>
                 </label>
                 <label>Date
@@ -384,13 +384,13 @@
                 <label>Preferred time
                     <select name="time" required>
                         <option value="">Choose</option>
-                        <option>10:00 AM</option>
-                        <option>11:00 AM</option>
-                        <option>12:00 PM</option>
-                        <option>4:00 PM</option>
-                        <option>5:00 PM</option>
-                        <option>6:00 PM</option>
-                        <option>7:00 PM</option>
+                        <option value="10:00 AM">10:00 AM</option>
+                        <option value="11:00 AM">11:00 AM</option>
+                        <option value="12:00 PM">12:00 PM</option>
+                        <option value="4:00 PM">4:00 PM</option>
+                        <option value="5:00 PM">5:00 PM</option>
+                        <option value="6:00 PM">6:00 PM</option>
+                        <option value="7:00 PM">7:00 PM</option>
                     </select>
                 </label>
             </div>
@@ -404,13 +404,24 @@
     </div>
 </div>
 
+<!-- SUCCESS MODAL (Restored in exact structure expected by app.js & styles.css) -->
+<div class="modal" id="successModal">
+    <div class="modal-box">
+        <button class="modal-close" id="modalClose" type="button" aria-label="Close">×</button>
+        <span class="modal-check">✓</span>
+        <h2>Request received</h2>
+        <p id="modalText">Your appointment request has been received.</p>
+        <button class="btn btn-primary" id="modalOk" type="button">Done</button>
+    </div>
+</div>
+
 <!-- JAVASCRIPT SCRIPTS -->
 <script src="/app.js"></script>
 <script>
     // Problem 2 Fix: Completely remove past time slots for today on website booking forms so they don't show up
     document.addEventListener('DOMContentLoaded', () => {
         const dateInputs = document.querySelectorAll('input[type="date"]');
-        
+
         dateInputs.forEach(dateInput => {
             const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
             dateInput.min = todayIso;
@@ -430,6 +441,11 @@
                 // Restore all original options first
                 timeSelect.innerHTML = timeSelect.dataset.originalOptions;
 
+                // Re-apply Hindi translation to restored options if site is in Hindi mode
+                if (document.body.classList.contains('hindi-mode') && typeof applyTranslation === 'function') {
+                    applyTranslation(timeSelect);
+                }
+
                 if (selectedDate === todayIso) {
                     const now = new Date();
                     const istTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
@@ -437,10 +453,10 @@
 
                     const options = Array.from(timeSelect.options);
                     options.forEach(opt => {
-                        const optText = opt.textContent.trim();
-                        if (!optText || optText === 'Choose' || optText === 'चुनें') return;
+                        const rawVal = (opt.value || opt.textContent || '').trim();
+                        if (!rawVal || rawVal === 'Choose' || rawVal === 'चुनें') return;
 
-                        const match = optText.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                        const match = rawVal.match(/(\d+):(\d+)\s*(AM|PM)/i);
                         if (match) {
                             let [, h, m, period] = match;
                             let slotHour = parseInt(h, 10);
@@ -614,3 +630,5 @@
         }
     });
 </script>
+</body>
+</html>
