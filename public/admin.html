@@ -50,21 +50,17 @@
   .pay-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
   .pay-box input, .pay-box select { padding: 7px; border: 1px solid #cbd5e1; border-radius: 6px; }
 
-  /* 4-Button WhatsApp Action Series */
+  /* WhatsApp Action Series (2 buttons per tab) */
   .wa-series-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
   .wa-series-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .wa-series-title { font-size: 0.8rem; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.4px; }
   .wa-reset-btn { background: none; border: none; color: #94a3b8; font-size: 0.75rem; cursor: pointer; text-decoration: underline; }
   .wa-series-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  @media (min-width: 640px) { .wa-series-grid { grid-template-columns: repeat(4, 1fr); } }
   .wa-btn { padding: 10px 8px; border-radius: 8px; border: 1px solid transparent; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .wa-btn small { font-size: 0.7rem; font-weight: 500; opacity: 0.9; }
-  /* Dark = Current Active Step */
   .wa-btn.active-step { background: #0f172a; color: #ffffff; border-color: #0f172a; box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2); }
   .wa-btn.active-step:hover { background: #1e293b; }
-  /* Light + Green Check = Completed Step */
   .wa-btn.done-step { background: #ecfdf5; color: #059669; border-color: #a7f3d0; opacity: 0.72; }
-  /* Light + Faded = Upcoming Step */
   .wa-btn.pending-step { background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; }
   .due-pill { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #fef3c7; color: #b45309; }
 </style>
@@ -115,7 +111,6 @@
 // ==========================================
 // GOOGLE CONSENT FORM CONFIG (PRE-FILLED LINK)
 // ==========================================
-// Jab Google Form ban jaye, bas neeche ke 5 values update kar dein:
 var GOOGLE_FORM_CONFIG = {
   baseUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSfA2NWLgU9OLd5hFxOBVfxYYFeImTSGfpbNiutKLapA5M1KfA/viewform',
   entryName: 'entry.821763214',
@@ -123,14 +118,6 @@ var GOOGLE_FORM_CONFIG = {
   entryApptId: '',
   entryPatientNo: 'entry.485623932'
 };
-
-
-var WA_STEPS = [
-  { key: 'consent',  label: '1. Consent Form',   sub: 'Google Form' },
-  { key: 'reminder', label: '2. 15-Min Reminder', sub: 'Before Call' },
-  { key: 'care',     label: '3. Care Message',   sub: 'After 7 Days' },
-  { key: 'followup', label: '4. Follow-up',      sub: 'Recheckup' }
-];
 
 var savedKey = localStorage.getItem('drpn_admin_key') || '';
 var allItems = [];
@@ -462,44 +449,6 @@ function renderWaButtonsHtml(a) {
   html += '</div></div>';
   return html;
 }
-  }
-  var daysSince = getDaysSince(a.date);
-  var dueBadge = '';
-  if (daysSince >= 7 && !steps.care) {
-    dueBadge = '<span class="due-pill">Care Due (' + daysSince + 'd)</span>';
-  } else if (daysSince >= 12 && !steps.followup) {
-    dueBadge = '<span class="due-pill">Follow-up Due</span>';
-  }
-
-  var html = '<div class="wa-series-box">';
-  html += '<div class="wa-series-head">';
-  html += '<span class="wa-series-title"><i class="fa-brands fa-whatsapp" style="color:#16a34a;"></i> WhatsApp Actions ' + dueBadge + '</span>';
-  html += '<button type="button" class="wa-reset-btn" onclick="resetWaSteps(\'' + a.id + '\')">Reset</button>';
-  html += '</div>';
-  html += '<div class="wa-series-grid">';
-
-  for (var j = 0; j < WA_STEPS.length; j++) {
-    var stObj = WA_STEPS[j];
-    var isDone = !!steps[stObj.key];
-    var cls = 'pending-step';
-    var prefix = '';
-
-    if (isDone) {
-      cls = 'done-step';
-      prefix = '✓ ';
-    } else if (stObj.key === activeKey) {
-      cls = 'active-step';
-    }
-
-    html += '<button type="button" class="wa-btn ' + cls + '" onclick="sendWaStep(\'' + a.id + '\', \'' + stObj.key + '\')">';
-    html += '<span>' + prefix + stObj.label + '</span>';
-    html += '<small>' + (isDone ? 'Sent (Tap to resend)' : stObj.sub) + '</small>';
-    html += '</button>';
-  }
-
-  html += '</div></div>';
-  return html;
-}
 
 function renderList() {
   var selDate = document.getElementById('dateFilter').value;
@@ -570,7 +519,6 @@ function renderList() {
       out += '</div>';
     }
 
-    // Show 4-Button WhatsApp Series for accepted & completed appointments
     if (st === 'accepted' || st === 'completed') {
       out += renderWaButtonsHtml(a);
     }
