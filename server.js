@@ -592,11 +592,14 @@ app.get('/api/admin/appointments', admin, async (req, res) => {
         if (date) {
             query.date = date;
         } else {
-            query.date = { $gte: todayString() };
+            // Pichhle 30 din se lekar aage ke sabhi appointments load karega (Care & Follow-up ke liye)
+            const past = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const p = indiaDateParts(past);
+            query.date = { $gte: `${p.year}-${p.month}-${p.day}` };
         }
         if (status) query.status = status;
 
-        const appointments = await Appointment.find(query).sort({ date: 1, time: 1, createdAt: -1 });
+        const appointments = await Appointment.find(query).sort({ date: -1, time: 1, createdAt: -1 });
         res.json({ ok: true, appointments });
     } catch (err) {
         res.status(500).json({ ok: false, error: err.message });
