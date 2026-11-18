@@ -17,8 +17,8 @@
   .admin-header h2 { margin: 0; font-size: 1.1rem; }
   .btn-outline { background: #fff; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
   .admin-container { max-width: 900px; margin: 20px auto; padding: 0 16px 40px; }
-  .status-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
-  .tab-btn { background: #fff; border: 1px solid #e2e8f0; padding: 12px; border-radius: 10px; font-weight: 600; color: #64748b; cursor: pointer; text-align: left; }
+  .status-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .tab-btn { background: #fff; border: 1px solid #e2e8f0; padding: 12px; border-radius: 10px; font-weight: 600; color: #64748b; cursor: pointer; text-align: left; font-size: 0.88rem; }
   .tab-btn.active { border-color: #0f766e; color: #0f766e; background: #f0fdf4; }
   .search-bar { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
   .search-bar input { border: none; outline: none; width: 100%; font-size: 0.95rem; }
@@ -49,6 +49,24 @@
   .btn-complete { background: #2563eb; }
   .pay-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
   .pay-box input, .pay-box select { padding: 7px; border: 1px solid #cbd5e1; border-radius: 6px; }
+
+  /* 4-Button WhatsApp Action Series */
+  .wa-series-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+  .wa-series-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .wa-series-title { font-size: 0.8rem; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.4px; }
+  .wa-reset-btn { background: none; border: none; color: #94a3b8; font-size: 0.75rem; cursor: pointer; text-decoration: underline; }
+  .wa-series-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  @media (min-width: 640px) { .wa-series-grid { grid-template-columns: repeat(4, 1fr); } }
+  .wa-btn { padding: 10px 8px; border-radius: 8px; border: 1px solid transparent; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .wa-btn small { font-size: 0.7rem; font-weight: 500; opacity: 0.9; }
+  /* Dark = Current Active Step */
+  .wa-btn.active-step { background: #0f172a; color: #ffffff; border-color: #0f172a; box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2); }
+  .wa-btn.active-step:hover { background: #1e293b; }
+  /* Light + Green Check = Completed Step */
+  .wa-btn.done-step { background: #ecfdf5; color: #059669; border-color: #a7f3d0; opacity: 0.72; }
+  /* Light + Faded = Upcoming Step */
+  .wa-btn.pending-step { background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; }
+  .due-pill { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: #fef3c7; color: #b45309; }
 </style>
 </head>
 <body>
@@ -73,6 +91,7 @@
   <div class="admin-container">
     <div class="status-tabs">
       <button type="button" id="tabActive" class="tab-btn active" onclick="setTab('all')">All statuses</button>
+      <button type="button" id="tabFollowup" class="tab-btn" onclick="setTab('followup')">Care & Follow-up</button>
       <button type="button" id="tabFinished" class="tab-btn" onclick="setTab('finished')">Finished visits</button>
     </div>
 
@@ -93,9 +112,29 @@
 </div>
 
 <script>
+// ==========================================
+// GOOGLE CONSENT FORM CONFIG (PRE-FILLED LINK)
+// ==========================================
+// Jab Google Form ban jaye, bas neeche ke 5 values update kar dein:
+var GOOGLE_FORM_CONFIG = {
+  baseUrl: '', // Example: 'https://docs.google.com/forms/d/e/1FAIpQLSe.../viewform'
+  entryName: '',          // Example: 'entry.123456789'
+  entryPhone: '',         // Example: 'entry.234567890'
+  entryApptId: '',        // Example: 'entry.345678901'
+  entryPatientNo: ''      // Example: 'entry.456789012'
+};
+
+var WA_STEPS = [
+  { key: 'consent',  label: '1. Consent Form',   sub: 'Google Form' },
+  { key: 'reminder', label: '2. 15-Min Reminder', sub: 'Before Call' },
+  { key: 'care',     label: '3. Care Message',   sub: 'After 7 Days' },
+  { key: 'followup', label: '4. Follow-up',      sub: 'Recheckup' }
+];
+
 var savedKey = localStorage.getItem('drpn_admin_key') || '';
 var allItems = [];
 var activeTab = 'all';
+var openDrawers = {};
 
 window.onload = function() {
   var inp = document.getElementById('adminKeyInput');
@@ -111,6 +150,119 @@ window.onload = function() {
     checkAndLoad(savedKey, true);
   }
 };
+
+function getStepStore() {
+  try {
+    return JSON.parse(localStorage.getItem('drpn_wa_steps') || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveStepStore(store) {
+  try {
+    localStorage.setItem('drpn_wa_steps', JSON.stringify(store));
+  } catch (e) {}
+}
+
+function getApptSteps(id) {
+  var store = getStepStore();
+  return store[id] || { consent: false, reminder: false, care: false, followup: false };
+}
+
+function markApptStepDone(id, stepKey) {
+  var store = getStepStore();
+  if (!store[id]) store[id] = { consent: false, reminder: false, care: false, followup: false };
+  store[id][stepKey] = true;
+  saveStepStore(store);
+}
+
+function resetWaSteps(id) {
+  if (!confirm('Reset WhatsApp button progress for this patient?')) return;
+  var store = getStepStore();
+  delete store[id];
+  saveStepStore(store);
+  renderList();
+}
+
+function formatWaPhone(raw) {
+  var digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length === 10) return '91' + digits;
+  return digits;
+}
+
+function buildConsentFormUrl(a) {
+  if (!GOOGLE_FORM_CONFIG.baseUrl) return '[INSERT_GOOGLE_FORM_LINK_HERE]';
+  var params = ['usp=pp_url'];
+  if (GOOGLE_FORM_CONFIG.entryName && a.name) params.push(GOOGLE_FORM_CONFIG.entryName + '=' + encodeURIComponent(a.name));
+  if (GOOGLE_FORM_CONFIG.entryPhone && a.phone) params.push(GOOGLE_FORM_CONFIG.entryPhone + '=' + encodeURIComponent(a.phone));
+  if (GOOGLE_FORM_CONFIG.entryApptId && a.appointmentNumber) params.push(GOOGLE_FORM_CONFIG.entryApptId + '=' + encodeURIComponent(a.appointmentNumber));
+  if (GOOGLE_FORM_CONFIG.entryPatientNo && a.patientNumber) params.push(GOOGLE_FORM_CONFIG.entryPatientNo + '=' + encodeURIComponent(a.patientNumber));
+  return GOOGLE_FORM_CONFIG.baseUrl + '?' + params.join('&');
+}
+
+function sendWaStep(id, stepKey) {
+  var a = null;
+  for (var i = 0; i < allItems.length; i++) {
+    if (allItems[i].id === id) { a = allItems[i]; break; }
+  }
+  if (!a) return;
+
+  var phone = formatWaPhone(a.phone);
+  if (!phone) {
+    alert('Valid phone number not found.');
+    return;
+  }
+
+  var msg = '';
+  var pName = a.name || 'Patient';
+  var pDate = niceDate(a.date);
+  var pTime = a.time || '';
+
+  if (stepKey === 'consent') {
+    var formUrl = buildConsentFormUrl(a);
+    msg = 'Namaste ' + pName + ' ji,\n\n'
+        + 'Dr. P. N. Singh ke saath aapke consultation se pehle, kripya yeh chhota sa Pre-Consultation Consent Form bhar dein:\n'
+        + formUrl + '\n\n'
+        + '• Appointment ID: #' + (a.appointmentNumber || '-') + '\n'
+        + '• Patient No.: ' + (a.patientNumber ? '#' + a.patientNumber : 'Assigned') + '\n\n'
+        + 'Form bharne ke baad humein yahan inform kar dein. Dhanyavaad!\n'
+        + '— Dr. P. N. Singh Clinic';
+  } else if (stepKey === 'reminder') {
+    msg = 'Namaste ' + pName + ' ji,\n\n'
+        + '⏰ *Appointment Reminder:* Dr. P. N. Singh ke saath aapka consultation *15 minute* mein shuru hone wala hai.\n\n'
+        + '• Date: ' + pDate + '\n'
+        + '• Time: ' + pTime + '\n'
+        + '• Mode: ' + (a.mode || 'Consultation') + '\n\n'
+        + 'Kripya shant jagah par aur achhe internet connection ke saath taiyaar rahein.\n'
+        + '— Dr. P. N. Singh Clinic';
+  } else if (stepKey === 'care') {
+    msg = 'Namaste ' + pName + ' ji,\n\n'
+        + 'Hum ummeed karte hain ki aap pehle se behtar mehsoos kar rahe honge. 😊\n\n'
+        + 'Kya aapko Dr. P. N. Singh dwara di gayi medicines suit kar rahi hain ya koi pareshani mehsoos ho rahi hai? Kripya humein zaroor batayein — hum aapki madad ke liye yahan hain.\n'
+        + '— Dr. P. N. Singh Clinic';
+  } else if (stepKey === 'followup') {
+    msg = 'Namaste ' + pName + ' ji,\n\n'
+        + '📅 *Follow-up Reminder:* Aapki medicines ka course jald poora hone wala hai. Bina ruke behtar ilaaj ke liye kripya apna follow-up / recheckup appointment book kar lein.\n\n'
+        + 'Booking ke liye aap yahan reply kar sakte hain ya hamari website par book kar sakte hain.\n'
+        + '— Dr. P. N. Singh Clinic';
+  }
+
+  var waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
+  window.open(waUrl, '_blank', 'noopener');
+
+  markApptStepDone(id, stepKey);
+  openDrawers[id] = true;
+  renderList();
+}
+
+function getDaysSince(dateStr) {
+  if (!dateStr) return 0;
+  var todayStr = getTodayIso();
+  var d1 = new Date(dateStr + 'T00:00:00');
+  var d2 = new Date(todayStr + 'T00:00:00');
+  return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
+}
 
 function doLogin() {
   var val = document.getElementById('adminKeyInput').value.trim();
@@ -198,6 +350,7 @@ async function fetchAppointments() {
 function setTab(t) {
   activeTab = t;
   document.getElementById('tabActive').className = (t === 'all') ? 'tab-btn active' : 'tab-btn';
+  document.getElementById('tabFollowup').className = (t === 'followup') ? 'tab-btn active' : 'tab-btn';
   document.getElementById('tabFinished').className = (t === 'finished') ? 'tab-btn active' : 'tab-btn';
   renderList();
 }
@@ -231,6 +384,63 @@ function niceDate(str) {
   return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function esc(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderWaButtonsHtml(a) {
+  var steps = getApptSteps(a.id);
+  // Find first step not yet completed -> that step gets Dark (active-step)
+  var activeKey = null;
+  for (var s = 0; s < WA_STEPS.length; s++) {
+    if (!steps[WA_STEPS[s].key]) {
+      activeKey = WA_STEPS[s].key;
+      break;
+    }
+  }
+
+  var daysSince = getDaysSince(a.date);
+  var dueBadge = '';
+  if (daysSince >= 7 && !steps.care) {
+    dueBadge = '<span class="due-pill">Care Due (' + daysSince + 'd)</span>';
+  } else if (daysSince >= 12 && !steps.followup) {
+    dueBadge = '<span class="due-pill">Follow-up Due</span>';
+  }
+
+  var html = '<div class="wa-series-box">';
+  html += '<div class="wa-series-head">';
+  html += '<span class="wa-series-title"><i class="fa-brands fa-whatsapp" style="color:#16a34a;"></i> WhatsApp Actions ' + dueBadge + '</span>';
+  html += '<button type="button" class="wa-reset-btn" onclick="resetWaSteps(\'' + a.id + '\')">Reset</button>';
+  html += '</div>';
+  html += '<div class="wa-series-grid">';
+
+  for (var j = 0; j < WA_STEPS.length; j++) {
+    var stObj = WA_STEPS[j];
+    var isDone = !!steps[stObj.key];
+    var cls = 'pending-step';
+    var prefix = '';
+
+    if (isDone) {
+      cls = 'done-step';
+      prefix = '✓ ';
+    } else if (stObj.key === activeKey) {
+      cls = 'active-step';
+    }
+
+    html += '<button type="button" class="wa-btn ' + cls + '" onclick="sendWaStep(\'' + a.id + '\', \'' + stObj.key + '\')">';
+    html += '<span>' + prefix + stObj.label + '</span>';
+    html += '<small>' + (isDone ? 'Sent (Tap to resend)' : stObj.sub) + '</small>';
+    html += '</button>';
+  }
+
+  html += '</div></div>';
+  return html;
+}
+
 function renderList() {
   var selDate = document.getElementById('dateFilter').value;
   var q = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -239,6 +449,10 @@ function renderList() {
   var list = allItems.filter(function(item) {
     if (activeTab === 'finished') {
       if (item.status !== 'completed' && item.status !== 'cancelled') return false;
+    } else if (activeTab === 'followup') {
+      if (item.status !== 'accepted' && item.status !== 'completed') return false;
+      var steps = getApptSteps(item.id);
+      if (steps.care && steps.followup) return false;
     }
     if (selDate && item.date !== selDate) return false;
     if (q) {
@@ -263,20 +477,21 @@ function renderList() {
     var st = a.status || 'new';
     var isPaid = a.payment && a.payment.status === 'paid';
     var payTxt = isPaid ? ('Paid Rs.' + a.payment.amount + ' (' + a.payment.method + ')') : 'Unpaid';
+    var drawerClass = openDrawers[a.id] ? 'action-drawer show' : 'action-drawer';
 
     out += '<div class="appt-card">';
-    out += '<div class="appt-row"><span class="appt-label">APPOINTMENT ID</span><span class="appt-id">' + (a.appointmentNumber || '-') + '</span></div>';
-    out += '<div class="appt-row"><span class="appt-label">PATIENT NO.</span><span class="appt-val">' + (a.patientNumber || '-') + '</span></div>';
-    out += '<div class="appt-row"><span class="appt-label">PATIENT NAME</span><span class="appt-val">' + (a.name || '-') + '</span></div>';
-    out += '<div class="appt-row"><span class="appt-label">PHONE</span><span class="appt-val">' + (a.phone || '-') + '</span></div>';
-    out += '<div class="appt-row"><span class="appt-label">DATE & TIME</span><span class="appt-val">' + niceDate(a.date) + ' ' + (a.time || '') + '</span></div>';
-    out += '<div class="appt-row"><span class="appt-label">MODE</span><span class="appt-val"><span class="badge mode">' + (a.mode || 'Clinic') + '</span></span></div>';
-    out += '<div class="appt-row"><span class="appt-label">STATUS</span><span class="appt-val"><span class="badge ' + st + '">' + st.toUpperCase() + '</span></span></div>';
-    out += '<div class="appt-row"><span class="appt-label">EMAIL</span><span class="appt-val">' + (a.email || '-') + '</span></div>';
-    out += '<div class="appt-row"><span class="appt-label">ACTION</span><span class="appt-val"><button type="button" class="open-btn" onclick="toggleBox(\'' + a.id + '\')">Open</button></span></div>';
+    out += '<div class="appt-row"><span class="appt-label">APPOINTMENT ID</span><span class="appt-id">' + esc(a.appointmentNumber || '-') + '</span></div>';
+    out += '<div class="appt-row"><span class="appt-label">PATIENT NO.</span><span class="appt-val">' + esc(a.patientNumber || '-') + '</span></div>';
+    out += '<div class="appt-row"><span class="appt-label">PATIENT NAME</span><span class="appt-val">' + esc(a.name || '-') + '</span></div>';
+    out += '<div class="appt-row"><span class="appt-label">PHONE</span><span class="appt-val">' + esc(a.phone || '-') + '</span></div>';
+    out += '<div class="appt-row"><span class="appt-label">DATE & TIME</span><span class="appt-val">' + niceDate(a.date) + ' ' + esc(a.time || '') + '</span></div>';
+    out += '<div class="appt-row"><span class="appt-label">MODE</span><span class="appt-val"><span class="badge mode">' + esc(a.mode || 'Clinic') + '</span></span></div>';
+    out += '<div class="appt-row"><span class="appt-label">STATUS</span><span class="appt-val"><span class="badge ' + esc(st) + '">' + esc(st.toUpperCase()) + '</span></span></div>';
+    out += '<div class="appt-row"><span class="appt-label">EMAIL</span><span class="appt-val">' + esc(a.email || '-') + '</span></div>';
+    out += '<div class="appt-row"><span class="appt-label">ACTION</span><span class="appt-val"><button type="button" class="open-btn" onclick="toggleBox(\'' + a.id + '\')">' + (openDrawers[a.id] ? 'Close' : 'Open') + '</button></span></div>';
 
-    out += '<div id="box_' + a.id + '" class="action-drawer">';
-    out += '<div style="font-size:0.85rem;margin-bottom:8px;"><b>Concern:</b> ' + (a.concern || 'None') + ' | <b>Payment:</b> ' + payTxt + '</div>';
+    out += '<div id="box_' + a.id + '" class="' + drawerClass + '">';
+    out += '<div style="font-size:0.85rem;margin-bottom:8px;"><b>Concern:</b> ' + esc(a.concern || 'None') + ' | <b>Payment:</b> ' + esc(payTxt) + '</div>';
     out += '<div class="drawer-btns">';
     if (st === 'new') {
       out += '<button type="button" class="btn-act btn-accept" onclick="changeStatus(\'' + a.id + '\', \'accepted\')">Accept & Assign Token</button>';
@@ -294,16 +509,20 @@ function renderList() {
       out += '<button type="button" class="btn-act" style="background:#0f766e;" onclick="savePay(\'' + a.id + '\')">Mark Paid</button>';
       out += '</div>';
     }
+
+    // Show 4-Button WhatsApp Series for accepted & completed appointments
+    if (st === 'accepted' || st === 'completed') {
+      out += renderWaButtonsHtml(a);
+    }
+
     out += '</div></div>';
   }
   box.innerHTML = out;
 }
 
 function toggleBox(id) {
-  var el = document.getElementById('box_' + id);
-  if (el) {
-    el.className = (el.className.indexOf('show') !== -1) ? 'action-drawer' : 'action-drawer show';
-  }
+  openDrawers[id] = !openDrawers[id];
+  renderList();
 }
 
 async function changeStatus(id, st) {
@@ -315,6 +534,7 @@ async function changeStatus(id, st) {
     });
     var d = await res.json();
     if (res.ok && d.ok) {
+      openDrawers[id] = true;
       fetchAppointments();
     } else {
       alert(d.message || 'Error updating status');
@@ -335,6 +555,7 @@ async function savePay(id) {
     });
     var d = await res.json();
     if (res.ok && d.ok) {
+      openDrawers[id] = true;
       fetchAppointments();
     } else {
       alert(d.message || 'Error saving payment');
