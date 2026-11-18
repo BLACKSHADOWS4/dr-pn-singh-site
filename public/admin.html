@@ -181,8 +181,16 @@ function markApptStepDone(id, stepKey) {
 function resetWaSteps(id) {
   if (!confirm('Reset WhatsApp button progress for this patient?')) return;
   var store = getStepStore();
-  delete store[id];
-  saveStepStore(store);
+  if (store[id]) {
+    if (activeTab === 'followup') {
+      store[id].care = false;
+      store[id].followup = false;
+    } else {
+      store[id].consent = false;
+      store[id].reminder = false;
+    }
+    saveStepStore(store);
+  }
   renderList();
 }
 
@@ -395,14 +403,65 @@ function esc(str) {
 
 function renderWaButtonsHtml(a) {
   var steps = getApptSteps(a.id);
-  // Find first step not yet completed -> that step gets Dark (active-step)
+  var visibleSteps = (activeTab === 'followup')
+    ? [
+        { key: 'care',     label: '1. Care Message', sub: 'After 7 Days' },
+        { key: 'followup', label: '2. Follow-up',    sub: 'Recheckup' }
+      ]
+    : [
+        { key: 'consent',  label: '1. Consent Form',    sub: 'Google Form' },
+        { key: 'reminder', label: '2. 15-Min Reminder', sub: 'Before Call' }
+      ];
+
   var activeKey = null;
-  for (var s = 0; s < WA_STEPS.length; s++) {
-    if (!steps[WA_STEPS[s].key]) {
-      activeKey = WA_STEPS[s].key;
+  for (var s = 0; s < visibleSteps.length; s++) {
+    if (!steps[visibleSteps[s].key]) {
+      activeKey = visibleSteps[s].key;
       break;
     }
   }
+
+  var daysSince = getDaysSince(a.date);
+  var dueBadge = '';
+  if (activeTab === 'followup') {
+    if (daysSince >= 7 && !steps.care) {
+      dueBadge = '<span class="due-pill">Care Due (' + daysSince + 'd)</span>';
+    } else if (daysSince >= 12 && !steps.followup) {
+      dueBadge = '<span class="due-pill">Follow-up Due</span>';
+    }
+  }
+
+  var boxTitle = (activeTab === 'followup') ? 'Care & Follow-up' : 'WhatsApp Actions';
+
+  var html = '<div class="wa-series-box">';
+  html += '<div class="wa-series-head">';
+  html += '<span class="wa-series-title"><i class="fa-brands fa-whatsapp" style="color:#16a34a;"></i> ' + boxTitle + ' ' + dueBadge + '</span>';
+  html += '<button type="button" class="wa-reset-btn" onclick="resetWaSteps(\'' + a.id + '\')">Reset</button>';
+  html += '</div>';
+  html += '<div class="wa-series-grid">';
+
+  for (var j = 0; j < visibleSteps.length; j++) {
+    var stObj = visibleSteps[j];
+    var isDone = !!steps[stObj.key];
+    var cls = 'pending-step';
+    var prefix = '';
+
+    if (isDone) {
+      cls = 'done-step';
+      prefix = '✓ ';
+    } else if (stObj.key === activeKey) {
+      cls = 'active-step';
+    }
+
+    html += '<button type="button" class="wa-btn ' + cls + '" onclick="sendWaStep(\'' + a.id + '\', \'' + stObj.key + '\')">';
+    html += '<span>' + prefix + stObj.label + '</span>';
+    html += '<small>' + (isDone ? 'Sent (Tap to resend)' : stObj.sub) + '</small>';
+    html += '</button>';
+  }
+
+  html += '</div></div>';
+  return html;
+}
 
   var daysSince = getDaysSince(a.date);
   var dueBadge = '';
