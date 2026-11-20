@@ -54,7 +54,7 @@ const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION || 'v25.0';
 const WHATSAPP_ENABLED = String(process.env.WHATSAPP_ENABLED || 'false').toLowerCase() === 'true';
 const CLINIC_WHATSAPP_NUMBER = process.env.CLINIC_WHATSAPP_NUMBER || '';
 const CLINIC_UPI_ID = process.env.CLINIC_UPI_ID || '';
-const CLINIC_PHONE = process.env.CLINIC_PHONE || '';
+const CLINIC_PHONE = process.env.CLINIC_PHONE || '+91 87659 04948';
 const CLINIC_EMAIL = process.env.CLINIC_EMAIL || '';
 const CLINIC_PAYMENT_NAME = process.env.CLINIC_PAYMENT_NAME || 'Dr. P. N. Singh';
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'clinic_verify_token';
@@ -241,7 +241,7 @@ function getAvailableSlotsForDate(mode, dateStr) {
             ? CLINIC_SLOTS.morningToEight.slice()
             : CLINIC_SLOTS.afternoonToEight.slice();
     } else {
-        // Offline Normal: Sat(6) 3 PM - 8 PM | Sun(0) 11 AM - 7 PM | Mon-Fri Closed
+        // Offline: Sat(6) 3 PM - 8 PM | Sun(0) 11 AM - 7 PM | Mon-Fri Closed
         if (dayOfWeek === 6) slots = CLINIC_SLOTS.afternoonToEight.slice();
         else if (dayOfWeek === 0) slots = CLINIC_SLOTS.morningToSeven.slice();
         else return { closedDay: true, slots: [] };
@@ -601,13 +601,13 @@ app.post('/api/appointments', async (req, res) => {
         if (closedDay) {
             return res.status(400).json({
                 ok: false,
-                message: 'Normal in-clinic visits are only available on Saturday (3–8 PM) and Sunday (11 AM–7 PM). Please choose Sat/Sun, or select Online / Emergency.'
+                message: 'In-clinic visits are only available on Saturday (3–8 PM) and Sunday (11 AM–7 PM). Please choose Sat/Sun, or select Online / Emergency.'
             });
         }
         if (!slots.length) {
             return res.status(400).json({
                 ok: false,
-                message: 'No normal slots remain for today (booking closes 30 minutes before each slot). Please select a future date or choose Emergency.'
+                message: 'No slots remain for today (booking closes 30 minutes before each slot). Please select a future date or choose Emergency.'
             });
         }
         if (!slots.includes(time)) {
@@ -652,7 +652,9 @@ app.post('/api/appointments', async (req, res) => {
 
     res.status(201).json({
         ok: true,
-        message: 'Your appointment request has been received. The clinic will confirm the appointment.',
+        message: isEmergency
+            ? 'Your emergency request has been received. Dr. P. N. Singh will contact you within 1 hour or as soon as possible.'
+            : 'Your appointment request has been received. The clinic will confirm the appointment.',
         appointmentId: appointment.id,
         appointmentNumber: appointment.appointmentNumber,
         fee,
@@ -827,13 +829,13 @@ const i18n = {
         btnLocation: 'Clinic Location',
         btnFees: 'Fees & Timings',
         locationText: `📍 *Clinic Location*\n\nDr. P. N. Singh Clinic\nC-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh.\n\n🗺️ *Google Maps:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
-        feeText: `💵 *Fees & Consultation Timings*\n\n👨‍⚕️ *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n\n🏥 *In-clinic (Normal) — ₹400*\n• Saturday: 3:00 PM – 8:00 PM\n• Sunday: 11:00 AM – 7:00 PM\n• Mon–Fri: Closed\n\n💻 *Online (Normal) — ₹500*\n• Mon, Tue, Thu, Fri: 3:00 PM – 8:00 PM\n• Wed, Sat, Sun: 11:00 AM – 8:00 PM\n\n🚨 *24x7 Emergency (Priority)*\n• In-clinic Emergency: ₹600\n• Online Emergency: ₹700\n\n⏰ _Note: Normal slot booking closes 30 mins before slot start._`,
+        feeText: `💵 *Fees & Consultation Timings*\n\n👨‍⚕️ *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n\n🏥 *In-clinic — ₹400*\n• Saturday: 3:00 PM – 8:00 PM\n• Sunday: 11:00 AM – 7:00 PM\n• Mon–Fri: Closed\n\n💻 *Online — ₹500*\n• Mon, Tue, Thu, Fri: 3:00 PM – 8:00 PM\n• Wed, Sat, Sun: 11:00 AM – 8:00 PM\n\n🚨 *24x7 Emergency (Priority)*\n• In-clinic Emergency: ₹600\n• Online Emergency: ₹700\n\n⏰ _Note: Slot booking closes 30 mins before slot start._`,
         askName: `📅 *WhatsApp Appointment Booking*\n\nLet's get you scheduled! First, please reply with your *Full Name*:`,
-        askMode: (name) => `Thank you, *${name}*! Please choose your consultation mode (reply *1*, *2*, *3*, or *4*):\n\n1️⃣ *In-clinic (Normal)* — ₹400\n2️⃣ *Online (Normal)* — ₹500\n3️⃣ *In-clinic Emergency (24x7)* — ₹600\n4️⃣ *Online Emergency (24x7)* — ₹700`,
+        askMode: (name) => `Thank you, *${name}*! Please choose your consultation mode (reply *1*, *2*, *3*, or *4*):\n\n1️⃣ *In-clinic* — ₹400\n2️⃣ *Online* — ₹500\n3️⃣ *In-clinic Emergency (24x7)* — ₹600\n4️⃣ *Online Emergency (24x7)* — ₹700`,
         askDate: (mode) => `Got it (*${mode}*). 📅\n\nPlease enter the date you want to book (e.g., *25/11/2026*, *Today*, or *Tomorrow*):`,
         askTime: (slots) => `⏰ Please choose an available time slot (reply with the *number* or *time*):\n\n${slots.map((s, idx) => `${idx + 1}. *${s}*`).join('\n')}`,
         askConcern: `Almost done! Do you have any specific health concern or symptoms to share?\n\n*(Type your concern or simply type *Skip* to bypass)*`,
-        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n• *Fee:* ₹${appt.fee}\n\nThe clinic will confirm your appointment shortly. You will receive your confirmed patient token number here soon!\n\n💬 *Direct Clinic WhatsApp:* If you need urgent assistance or don't hear back, message the clinic directly here: https://wa.me/919876766533`
+        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n• *Fee:* ₹${appt.fee}\n\n${appt.isEmergency ? '🚨 *Priority Care:* Dr. P. N. Singh will contact you within *1 hour or as soon as possible*.' : 'The clinic will confirm your appointment shortly. You will receive your confirmed patient token number here soon!'}\n\n💬 *Direct Clinic WhatsApp:* If you need urgent assistance or don't hear back, message the clinic directly here: https://wa.me/919876766533`
     },
     hi: {
         greeting: `नमस्ते! मैं डॉ. पी. एन. सिंह क्लीनिक का वर्चुअल असिस्टेंट हूँ। आज हम आपकी कैसे मदद कर सकते हैं?`,
@@ -841,13 +843,13 @@ const i18n = {
         btnLocation: 'क्लीनिक का पता',
         btnFees: 'फीस और समय',
         locationText: `📍 *क्लीनिक का पता*\n\nडॉ. पी. एन. सिंह क्लीनिक\nसी-190, बिलंदपुर न्यू कॉलोनी, प्लैटिनम एमआरआई के पास, गोरखपुर, उत्तर प्रदेश।\n\n🗺️ *गूगल मैप्स:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
-        feeText: `💵 *फीस और परामर्श का समय*\n\n👨‍⚕️ *डॉक्टर:* डॉ. पी. एन. सिंह (न्यूरोसाइकियाट्रिस्ट)\n\n🏥 *क्लीनिक (सामान्य) — ₹400*\n• शनिवार: दोपहर 3:00 – रात 8:00 बजे\n• रविवार: सुबह 11:00 – शाम 7:00 बजे\n• सोम–शुक्र: बंद\n\n💻 *ऑनलाइन (सामान्य) — ₹500*\n• सोम, मंगल, गुरु, शुक्र: दोपहर 3:00 – रात 8:00 बजे\n• बुध, शनि, रवि: सुबह 11:00 – रात 8:00 बजे\n\n🚨 *24x7 इमरजेंसी (प्राथमिकता)*\n• क्लीनिक इमरजेंसी: ₹600\n• ऑनलाइन इमरजेंसी: ₹700\n\n⏰ _नोट: सामान्य स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।_`,
+        feeText: `💵 *फीस और परामर्श का समय*\n\n👨‍⚕️ *डॉक्टर:* डॉ. पी. एन. सिंह (न्यूरोसाइकियाट्रिस्ट)\n\n🏥 *क्लीनिक — ₹400*\n• शनिवार: दोपहर 3:00 – रात 8:00 बजे\n• रविवार: सुबह 11:00 – शाम 7:00 बजे\n• सोम–शुक्र: बंद\n\n💻 *ऑनलाइन — ₹500*\n• सोम, मंगल, गुरु, शुक्र: दोपहर 3:00 – रात 8:00 बजे\n• बुध, शनि, रवि: सुबह 11:00 – रात 8:00 बजे\n\n🚨 *24x7 इमरजेंसी (प्राथमिकता)*\n• क्लीनिक इमरजेंसी: ₹600\n• ऑनलाइन इमरजेंसी: ₹700\n\n⏰ _नोट: स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।_`,
         askName: `📅 *व्हाट्सएप अपॉइंटमेंट बुकिंग*\n\nचलिए आपका अपॉइंटमेंट तय करते हैं! सबसे पहले, कृपया अपना *पूरा नाम* लिखकर भेजें:`,
-        askMode: (name) => `धन्यवाद, *${name}*! कृपया परामर्श का माध्यम चुनें (*1*, *2*, *3*, या *4* लिखकर भेजें):\n\n1️⃣ *क्लीनिक (सामान्य)* — ₹400\n2️⃣ *ऑनलाइन (सामान्य)* — ₹500\n3️⃣ *क्लीनिक इमरजेंसी (24x7)* — ₹600\n4️⃣ *ऑनलाइन इमरजेंसी (24x7)* — ₹700`,
+        askMode: (name) => `धन्यवाद, *${name}*! कृपया परामर्श का माध्यम चुनें (*1*, *2*, *3*, या *4* लिखकर भेजें):\n\n1️⃣ *क्लीनिक* — ₹400\n2️⃣ *ऑनलाइन* — ₹500\n3️⃣ *क्लीनिक इमरजेंसी (24x7)* — ₹600\n4️⃣ *ऑनलाइन इमरजेंसी (24x7)* — ₹700`,
         askDate: (mode) => `समझ गया (*${mode}*)। 📅\n\nकृपया वह तारीख दर्ज करें जिस दिन आप अपॉइंटमेंट बुक करना चाहते हैं (जैसे *25/11/2026*, *आज*, या *कल*):`,
         askTime: (slots) => `⏰ कृपया उपलब्ध समय चुनें (*नंबर* या *समय* लिखकर भेजें):\n\n${slots.map((s, idx) => `${idx + 1}. *${s}*`).join('\n')}`,
         askConcern: `लगभग पूरा हो गया! क्या आपको अपनी किसी समस्या के बारे में बताना है?\n\n*(अपनी समस्या लिखें या इसे छोड़ने के लिए *Skip* लिखें)*`,
-        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n• *शुल्क:* ₹${appt.fee}\n\nक्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!\n\n💬 *क्लीनिक का सीधा WhatsApp:* अगर आपको तुरंत बात करनी हो या कोई सहायता चाहिए, तो सीधे क्लीनिक के WhatsApp पर मैसेज करें: https://wa.me/919876766533`
+        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n• *शुल्क:* ₹${appt.fee}\n\n${appt.isEmergency ? '🚨 *प्राथमिकता:* डॉ. पी. एन. सिंह आपसे *1 घंटे के अंदर या जितनी जल्दी हो सके* संपर्क करेंगे।' : 'क्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!'}\n\n💬 *क्लीनिक का सीधा WhatsApp:* अगर आपको तुरंत बात करनी हो या कोई सहायता चाहिए, तो सीधे क्लीनिक के WhatsApp पर मैसेज करें: https://wa.me/919876766533`
     }
 };
 
@@ -973,8 +975,8 @@ app.post('/webhook', async (req, res) => {
                                     session.step = 'awaiting_concern';
                                     await session.save();
                                     const emergNote = lang === 'hi'
-                                        ? `🚨 *24x7 इमरजेंसी प्राथमिकता (${selectedMode})* चुनी गई है।\n\n${i18n.hi.askConcern}`
-                                        : `🚨 *24x7 Emergency Priority (${selectedMode})* selected.\n\n${i18n.en.askConcern}`;
+                                        ? `🚨 *24x7 इमरजेंसी प्राथमिकता (${selectedMode})* चुनी गई है। डॉक्टर आपसे *1 घंटे के अंदर या जितनी जल्दी हो सके* संपर्क करेंगे।\n\n${i18n.hi.askConcern}`
+                                        : `🚨 *24x7 Emergency Priority (${selectedMode})* selected. Doctor will contact you *within 1 hour or as soon as possible*.\n\n${i18n.en.askConcern}`;
                                     await sendWhatsAppText(senderPhone, emergNote);
                                 } else {
                                     session.step = 'awaiting_date';
@@ -997,16 +999,16 @@ app.post('/webhook', async (req, res) => {
                                 const { closedDay, slots } = getAvailableSlotsForDate(session.data.mode, parsedDate);
                                 if (closedDay) {
                                     const closedMsg = lang === 'hi'
-                                        ? `⚠️ *क्लीनिक इस दिन बंद रहता है।* सामान्य ऑफलाइन परामर्श केवल *शनिवार (3–8 PM)* और *रविवार (11 AM–7 PM)* को उपलब्ध है। कृपया शनिवार या रविवार की तारीख दर्ज करें:`
-                                        : `⚠️ *Clinic is closed on this day.* Normal in-clinic visits are available only on *Saturday (3–8 PM)* and *Sunday (11 AM–7 PM)*. Please enter a Saturday or Sunday date:`;
+                                        ? `⚠️ *क्लीनिक इस दिन बंद रहता है।* ऑफलाइन परामर्श केवल *शनिवार (3–8 PM)* और *रविवार (11 AM–7 PM)* को उपलब्ध है। कृपया शनिवार या रविवार की तारीख दर्ज करें:`
+                                        : `⚠️ *Clinic is closed on this day.* In-clinic visits are available only on *Saturday (3–8 PM)* and *Sunday (11 AM–7 PM)*. Please enter a Saturday or Sunday date:`;
                                     await sendWhatsAppText(senderPhone, closedMsg);
                                     return res.status(200).send('EVENT_RECEIVED');
                                 }
 
                                 if (!slots.length) {
                                     const cutoffMsg = lang === 'hi'
-                                        ? `⏰ *आज के सभी सामान्य स्लॉट बंद हो चुके हैं* (स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है)। कृपया कल या किसी अगली तारीख को चुनें:`
-                                        : `⏰ *All normal slots for today have closed* (30-minute cutoff before slot start). Please enter tomorrow's or a future date:`;
+                                        ? `⏰ *आज के सभी स्लॉट बंद हो चुके हैं* (स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है)। कृपया कल या किसी अगली तारीख को चुनें:`
+                                        : `⏰ *All slots for today have closed* (30-minute cutoff before slot start). Please enter tomorrow's or a future date:`;
                                     await sendWhatsAppText(senderPhone, cutoffMsg);
                                     return res.status(200).send('EVENT_RECEIVED');
                                 }
