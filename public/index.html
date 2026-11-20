@@ -14,6 +14,28 @@
         .hindi-mode, .hindi-mode * {
             letter-spacing: normal !important;
         }
+        .schedule-info-box {
+            display: none;
+            margin: 10px 0 14px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            font-size: 0.88rem;
+            line-height: 1.45;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #1e293b;
+        }
+        .schedule-info-box.show { display: block; }
+        .schedule-info-box.urgent-info {
+            background: #fef2f2;
+            border-color: #fca5a5;
+            color: #991b1b;
+        }
+        .schedule-info-box.closed-info {
+            background: #fffbeb;
+            border-color: #fcd34d;
+            color: #92400e;
+        }
     </style>
     <!-- Vercel Web Analytics -->
     <script>
@@ -223,8 +245,10 @@
                     <label>Consultation mode
                         <select name="mode" required>
                             <option value="">Choose</option>
-                            <option value="In-clinic">In-clinic</option>
-                            <option value="Online">Online</option>
+                            <option value="In-clinic">In-clinic (Normal — ₹400)</option>
+                            <option value="Online">Online (Normal — ₹500)</option>
+                            <option value="In-clinic (Emergency)">In-clinic Emergency (24x7 — ₹600)</option>
+                            <option value="Online (Emergency)">Online Emergency (24x7 — ₹700)</option>
                         </select>
                     </label>
                     <label>Date
@@ -232,17 +256,11 @@
                     </label>
                     <label>Preferred time
                         <select name="time" required>
-                            <option value="">Choose</option>
-                            <option value="10:00 AM">10:00 AM</option>
-                            <option value="11:00 AM">11:00 AM</option>
-                            <option value="12:00 PM">12:00 PM</option>
-                            <option value="4:00 PM">4:00 PM</option>
-                            <option value="5:00 PM">5:00 PM</option>
-                            <option value="6:00 PM">6:00 PM</option>
-                            <option value="7:00 PM">7:00 PM</option>
+                            <option value="">Select mode & date first</option>
                         </select>
                     </label>
                 </div>
+                <div class="schedule-info-box" data-schedule-info></div>
                 <label>Briefly tell us what you would like help with
                     <textarea name="concern" rows="3" placeholder="Optional"></textarea>
                 </label>
@@ -374,8 +392,10 @@
                 <label>Consultation mode
                     <select name="mode" required>
                         <option value="">Choose</option>
-                        <option value="In-clinic">In-clinic</option>
-                        <option value="Online">Online</option>
+                        <option value="In-clinic">In-clinic (Normal — ₹400)</option>
+                        <option value="Online">Online (Normal — ₹500)</option>
+                        <option value="In-clinic (Emergency)">In-clinic Emergency (24x7 — ₹600)</option>
+                        <option value="Online (Emergency)">Online Emergency (24x7 — ₹700)</option>
                     </select>
                 </label>
                 <label>Date
@@ -383,17 +403,11 @@
                 </label>
                 <label>Preferred time
                     <select name="time" required>
-                        <option value="">Choose</option>
-                        <option value="10:00 AM">10:00 AM</option>
-                        <option value="11:00 AM">11:00 AM</option>
-                        <option value="12:00 PM">12:00 PM</option>
-                        <option value="4:00 PM">4:00 PM</option>
-                        <option value="5:00 PM">5:00 PM</option>
-                        <option value="6:00 PM">6:00 PM</option>
-                        <option value="7:00 PM">7:00 PM</option>
+                        <option value="">Select mode & date first</option>
                     </select>
                 </label>
             </div>
+            <div class="schedule-info-box" data-schedule-info></div>
             <label>Briefly tell us what you would like help with
                 <textarea name="concern" rows="3" placeholder="Optional"></textarea>
             </label>
@@ -404,7 +418,7 @@
     </div>
 </div>
 
-<!-- SUCCESS MODAL (Restored in exact structure expected by app.js & styles.css) -->
+<!-- SUCCESS MODAL -->
 <div class="modal" id="successModal">
     <div class="modal-box">
         <button class="modal-close" id="modalClose" type="button" aria-label="Close">×</button>
@@ -418,68 +432,199 @@
 <!-- JAVASCRIPT SCRIPTS -->
 <script src="/app.js"></script>
 <script>
-    // Problem 2 Fix: Completely remove past time slots for today on website booking forms so they don't show up
-    document.addEventListener('DOMContentLoaded', () => {
-        const dateInputs = document.querySelectorAll('input[type="date"]');
+    // =========================================================================
+    // CLINIC SCHEDULE, FEES, 30-MIN CUTOFF & 24x7 EMERGENCY LOGIC
+    // =========================================================================
+    const CLINIC_SLOTS = {
+        morningToSeven: ['11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM'],
+        morningToEight: ['11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM'],
+        afternoonToEight: ['3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM']
+    };
 
-        dateInputs.forEach(dateInput => {
-            const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const formUpdaters = [];
+
+    function parseSlotToMinutes(slotStr) {
+        const match = String(slotStr || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return -1;
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const period = match[3].toUpperCase();
+        if (period === 'PM' && h < 12) h += 12;
+        if (period === 'AM' && h === 12) h = 0;
+        return h * 60 + m;
+    }
+
+    function getIstNow() {
+        const now = new Date();
+        const todayIso = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        const istTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
+        const [currH, currM] = istTimeStr.split(':').map(Number);
+        return { todayIso, nowMinutes: currH * 60 + currM };
+    }
+
+    function setupBookingFormLogic() {
+        const forms = document.querySelectorAll('#appointmentForm, #appointmentModalForm');
+
+        forms.forEach(form => {
+            const modeSelect = form.querySelector('select[name="mode"]');
+            const dateInput = form.querySelector('input[name="date"]');
+            const timeSelect = form.querySelector('select[name="time"]');
+            const infoBox = form.querySelector('[data-schedule-info]');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (!modeSelect || !dateInput || !timeSelect) return;
+
+            const { todayIso } = getIstNow();
             dateInput.min = todayIso;
 
-            const form = dateInput.closest('form');
-            if (!form) return;
-            const timeSelect = form.querySelector('select[name="time"]');
-            if (!timeSelect) return;
-
-            // Save original options list once
-            if (!timeSelect.dataset.originalOptions) {
-                timeSelect.dataset.originalOptions = timeSelect.innerHTML;
-            }
-
-            const updateTimeSlots = () => {
+            const updateFormSlots = () => {
+                const isHi = document.body.classList.contains('hindi-mode');
+                const mode = modeSelect.value;
                 const selectedDate = dateInput.value;
-                // Restore all original options first
-                timeSelect.innerHTML = timeSelect.dataset.originalOptions;
+                const { todayIso: currTodayIso, nowMinutes } = getIstNow();
+                dateInput.min = currTodayIso;
 
-                // Re-apply Hindi translation to restored options if site is in Hindi mode
-                if (document.body.classList.contains('hindi-mode') && typeof applyTranslation === 'function') {
-                    applyTranslation(timeSelect);
+                const prevVal = timeSelect.value;
+                timeSelect.innerHTML = '';
+                if (infoBox) {
+                    infoBox.className = 'schedule-info-box';
+                    infoBox.innerHTML = '';
+                }
+                if (submitBtn) submitBtn.disabled = false;
+
+                if (!mode) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = isHi ? 'पहले माध्यम और तारीख चुनें' : 'Select mode & date first';
+                    timeSelect.appendChild(opt);
+                    return;
                 }
 
-                if (selectedDate === todayIso) {
-                    const now = new Date();
-                    const istTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false });
-                    const [currH, currM] = istTimeStr.split(':').map(Number);
+                const isEmergency = /emergency/i.test(mode);
+                const isOnline = /online/i.test(mode);
 
-                    const options = Array.from(timeSelect.options);
-                    options.forEach(opt => {
-                        const rawVal = (opt.value || opt.textContent || '').trim();
-                        if (!rawVal || rawVal === 'Choose' || rawVal === 'चुनें') return;
+                // 24x7 EMERGENCY FLOW (No cutoff, open all days)
+                if (isEmergency) {
+                    const fee = isOnline ? 700 : 600;
+                    const opt = document.createElement('option');
+                    opt.value = 'Priority (24x7 Emergency)';
+                    opt.textContent = isHi ? 'तत्काल प्राथमिकता (24x7 इमरजेंसी)' : 'Priority (24x7 Emergency)';
+                    opt.selected = true;
+                    timeSelect.appendChild(opt);
 
-                        const match = rawVal.match(/(\d+):(\d+)\s*(AM|PM)/i);
-                        if (match) {
-                            let [, h, m, period] = match;
-                            let slotHour = parseInt(h, 10);
-                            const slotMin = parseInt(m, 10);
+                    if (!selectedDate) dateInput.value = currTodayIso;
 
-                            if (period.toUpperCase() === 'PM' && slotHour < 12) slotHour += 12;
-                            if (period.toUpperCase() === 'AM' && slotHour === 12) slotHour = 0;
+                    if (infoBox) {
+                        infoBox.className = 'schedule-info-box show urgent-info';
+                        infoBox.innerHTML = isHi
+                            ? `<strong>🚨 24x7 इमरजेंसी परामर्श (${isOnline ? 'ऑनलाइन' : 'क्लीनिक'}): शुल्क ₹${fee}</strong><br>कोई स्लॉट प्रतीक्षा नहीं — डॉक्टर की शीघ्रतम उपलब्धता पर प्राथमिकता दी जाएगी।<br><small>जानलेवा या गंभीर मेडिकल इमरजेंसी में कृपया तुरंत नज़दीकी अस्पताल जाएँ।</small>`
+                            : `<strong>🚨 24x7 Emergency Consultation (${isOnline ? 'Online' : 'In-clinic'}): Fee ₹${fee}</strong><br>No slot cutoff — priority consultation at Dr. P. N. Singh's earliest availability.<br><small>For life-threatening medical emergencies, please visit the nearest hospital immediately.</small>`;
+                    }
+                    return;
+                }
 
-                            // If the time slot has passed today, remove it completely from the dropdown list
-                            if (slotHour < currH || (slotHour === currH && slotMin <= currM)) {
-                                opt.remove();
-                            }
-                        }
+                // NORMAL MODE INFO BANNER
+                const normalFee = isOnline ? 500 : 400;
+                const scheduleSummary = isOnline
+                    ? (isHi
+                        ? `<strong>ऑनलाइन (सामान्य) शुल्क: ₹${normalFee}</strong><br>सोम, मंगल, गुरु, शुक्र: दोपहर 3:00 – रात 8:00 बजे | बुध, शनि, रवि: सुबह 11:00 – रात 8:00 बजे<br><small>नोट: हर स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।</small>`
+                        : `<strong>Online (Normal) Fee: ₹${normalFee}</strong><br>Mon, Tue, Thu, Fri: 3:00 PM – 8:00 PM | Wed, Sat, Sun: 11:00 AM – 8:00 PM<br><small>Note: Booking closes 30 minutes before each slot starts.</small>`)
+                    : (isHi
+                        ? `<strong>क्लीनिक (सामान्य) शुल्क: ₹${normalFee}</strong><br>शनिवार: दोपहर 3:00 – रात 8:00 बजे | रविवार: सुबह 11:00 – शाम 7:00 बजे (सोम–शुक्र बंद)<br><small>नोट: हर स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।</small>`
+                        : `<strong>In-clinic (Normal) Fee: ₹${normalFee}</strong><br>Saturday: 3:00 PM – 8:00 PM | Sunday: 11:00 AM – 7:00 PM (Mon–Fri Closed)<br><small>Note: Booking closes 30 minutes before each slot starts.</small>`);
+
+                if (infoBox) {
+                    infoBox.className = 'schedule-info-box show';
+                    infoBox.innerHTML = scheduleSummary;
+                }
+
+                if (!selectedDate) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = isHi ? 'कृपया पहले तारीख चुनें' : 'Please select a date first';
+                    timeSelect.appendChild(opt);
+                    return;
+                }
+
+                // Day of week in IST (0 = Sun, 1 = Mon, ..., 6 = Sat)
+                const dayOfWeek = new Date(selectedDate + 'T12:00:00+05:30').getDay();
+                let slots = [];
+
+                if (isOnline) {
+                    // Wed (3), Sat (6), Sun (0) -> 11 AM to 8 PM; Mon, Tue, Thu, Fri -> 3 PM to 8 PM
+                    slots = (dayOfWeek === 0 || dayOfWeek === 3 || dayOfWeek === 6)
+                        ? CLINIC_SLOTS.morningToEight.slice()
+                        : CLINIC_SLOTS.afternoonToEight.slice();
+                } else {
+                    // In-clinic Normal: Sat (6) -> 3 PM to 8 PM; Sun (0) -> 11 AM to 7 PM; Mon-Fri -> Closed
+                    if (dayOfWeek === 6) {
+                        slots = CLINIC_SLOTS.afternoonToEight.slice();
+                    } else if (dayOfWeek === 0) {
+                        slots = CLINIC_SLOTS.morningToSeven.slice();
+                    } else {
+                        slots = [];
+                    }
+                }
+
+                // If Clinic is closed on selected weekday
+                if (!isOnline && slots.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = isHi ? 'इस दिन क्लीनिक बंद है (शनि/रवि चुनें)' : 'Clinic closed on this day (Choose Sat/Sun)';
+                    timeSelect.appendChild(opt);
+                    if (submitBtn) submitBtn.disabled = true;
+                    if (infoBox) {
+                        infoBox.className = 'schedule-info-box show closed-info';
+                        infoBox.innerHTML = isHi
+                            ? `<strong>⚠️ क्लीनिक बंद है:</strong> सामान्य ऑफलाइन परामर्श केवल <strong>शनिवार (3–8 PM)</strong> और <strong>रविवार (11 AM–7 PM)</strong> को उपलब्ध है। कृपया शनिवार/रविवार चुनें, या <strong>Online / Emergency</strong> विकल्प चुनें।`
+                            : `<strong>⚠️ Clinic Closed:</strong> Normal in-clinic visits are available only on <strong>Saturday (3:00 PM – 8:00 PM)</strong> and <strong>Sunday (11:00 AM – 7:00 PM)</strong>. Please select Sat/Sun, or choose <strong>Online / Emergency</strong>.`;
+                    }
+                    return;
+                }
+
+                // Apply 30-Minute Cutoff for Today (Normal Online & Offline)
+                if (selectedDate === currTodayIso) {
+                    slots = slots.filter(slotStr => {
+                        const slotMin = parseSlotToMinutes(slotStr);
+                        return (slotMin - nowMinutes) > 30;
                     });
                 }
+
+                if (slots.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = isHi ? 'आज के सभी स्लॉट बंद हो चुके हैं — कल की तारीख चुनें' : 'No slots left today — please pick another date';
+                    timeSelect.appendChild(opt);
+                    if (submitBtn) submitBtn.disabled = true;
+                    if (infoBox) {
+                        infoBox.className = 'schedule-info-box show closed-info';
+                        infoBox.innerHTML = isHi
+                            ? `<strong>⏰ आज की सामान्य बुकिंग बंद हो चुकी है</strong> (स्लॉट शुरू होने से 30 मिनट पहले कटऑफ)। कृपया अगले दिन की तारीख चुनें, या तुरंत परामर्श के लिए <strong>Emergency</strong> चुनें।`
+                            : `<strong>⏰ Today's normal slots have closed</strong> (30-minute cutoff before slot start). Please choose a future date, or select <strong>Emergency</strong> for immediate priority.`;
+                    }
+                    return;
+                }
+
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = isHi ? 'समय चुनें' : 'Choose time slot';
+                timeSelect.appendChild(defaultOpt);
+
+                slots.forEach(slotStr => {
+                    const opt = document.createElement('option');
+                    opt.value = slotStr;
+                    opt.textContent = (isHi && hiDict[slotStr]) ? hiDict[slotStr] : slotStr;
+                    if (slotStr === prevVal) opt.selected = true;
+                    timeSelect.appendChild(opt);
+                });
             };
 
-            dateInput.addEventListener('change', updateTimeSlots);
-            if (dateInput.value) {
-                updateTimeSlots();
-            }
+            modeSelect.addEventListener('change', updateFormSlots);
+            dateInput.addEventListener('change', updateFormSlots);
+            form.addEventListener('reset', () => setTimeout(updateFormSlots, 50));
+            formUpdaters.push(updateFormSlots);
+            updateFormSlots();
         });
-    });
+    }
 
     // Language Translation Dictionary & Logic
     const hiDict = {
@@ -547,13 +692,17 @@
         "Email": "ईमेल",
         "Consultation mode": "परामर्श का माध्यम",
         "Choose": "चुनें",
-        "In-clinic": "क्लीनिक में आकर (In-clinic)",
-        "Online": "ऑनलाइन (Online)",
+        "In-clinic (Normal — ₹400)": "क्लीनिक में आकर (सामान्य — ₹400)",
+        "Online (Normal — ₹500)": "ऑनलाइन (सामान्य — ₹500)",
+        "In-clinic Emergency (24x7 — ₹600)": "क्लीनिक इमरजेंसी (24x7 — ₹600)",
+        "Online Emergency (24x7 — ₹700)": "ऑनलाइन इमरजेंसी (24x7 — ₹700)",
         "Date": "तारीख",
         "Preferred time": "पसंदीदा समय",
-        "10:00 AM": "सुबह 10:00 बजे",
         "11:00 AM": "सुबह 11:00 बजे",
         "12:00 PM": "दोपहर 12:00 बजे",
+        "1:00 PM": "दोपहर 1:00 बजे",
+        "2:00 PM": "दोपहर 2:00 बजे",
+        "3:00 PM": "दोपहर 3:00 बजे",
         "4:00 PM": "शाम 4:00 बजे",
         "5:00 PM": "शाम 5:00 बजे",
         "6:00 PM": "शाम 6:00 बजे",
@@ -617,15 +766,18 @@
             document.body.classList.add('hindi-mode');
             applyTranslation(document.body);
         }
+        formUpdaters.forEach(fn => fn());
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+        setupBookingFormLogic();
         const savedLang = sessionStorage.getItem('site_lang');
         if (savedLang) {
             document.getElementById('langModal').style.display = 'none';
             if (savedLang === 'hi') {
                 document.body.classList.add('hindi-mode');
                 applyTranslation(document.body);
+                formUpdaters.forEach(fn => fn());
             }
         }
     });
