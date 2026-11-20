@@ -103,9 +103,8 @@
         <div class="hero-visual">
             <div class="leaf-art"></div>
             <div class="social-rail">
-                <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
-                <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
-                <a href="#" aria-label="LinkedIn"><i class="fa-brands fa-linkedin-in"></i></a>
+                <a href="https://www.instagram.com/dr.prithvineuropsychiatric?fqnt=aWl2b2Fpd3psamxn" target="_blank" rel="noopener" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+                <a href="https://www.facebook.com/share/1EFesd6vXT/" target="_blank" rel="noopener" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
             </div>
             <div class="doctor-photo-wrap">
                 <img src="/Images/doctor-hero.png" alt="Doctor portrait">
@@ -245,8 +244,8 @@
                     <label>Consultation mode
                         <select name="mode" required>
                             <option value="">Choose</option>
-                            <option value="In-clinic">In-clinic (Normal — ₹400)</option>
-                            <option value="Online">Online (Normal — ₹500)</option>
+                            <option value="In-clinic">In-clinic — ₹400</option>
+                            <option value="Online">Online — ₹500</option>
                             <option value="In-clinic (Emergency)">In-clinic Emergency (24x7 — ₹600)</option>
                             <option value="Online (Emergency)">Online Emergency (24x7 — ₹700)</option>
                         </select>
@@ -275,10 +274,10 @@
             <p class="eyebrow">Find the clinic</p>
             <h2>Contact & Location</h2>
             <div class="contact-grid">
-                <a class="contact-box" href="tel:+919876766533">
+                <a class="contact-box" href="tel:+918765904948">
                     <span class="contact-icon"><i class="fa-solid fa-phone"></i></span>
                     <span class="contact-label">MOBILE</span>
-                    <strong>+91 98767 66533</strong>
+                    <strong>+91 87659 04948</strong>
                 </a>
                 <a class="contact-box" href="https://wa.me/915513581703" target="_blank" rel="noopener">
                     <span class="contact-icon"><i class="fa-brands fa-whatsapp"></i></span>
@@ -392,8 +391,8 @@
                 <label>Consultation mode
                     <select name="mode" required>
                         <option value="">Choose</option>
-                        <option value="In-clinic">In-clinic (Normal — ₹400)</option>
-                        <option value="Online">Online (Normal — ₹500)</option>
+                        <option value="In-clinic">In-clinic — ₹400</option>
+                        <option value="Online">Online — ₹500</option>
                         <option value="In-clinic (Emergency)">In-clinic Emergency (24x7 — ₹600)</option>
                         <option value="Online (Emergency)">Online Emergency (24x7 — ₹700)</option>
                     </select>
@@ -516,21 +515,21 @@
                     if (infoBox) {
                         infoBox.className = 'schedule-info-box show urgent-info';
                         infoBox.innerHTML = isHi
-                            ? `<strong>🚨 24x7 इमरजेंसी परामर्श (${isOnline ? 'ऑनलाइन' : 'क्लीनिक'}): शुल्क ₹${fee}</strong><br>कोई स्लॉट प्रतीक्षा नहीं — डॉक्टर की शीघ्रतम उपलब्धता पर प्राथमिकता दी जाएगी।<br><small>जानलेवा या गंभीर मेडिकल इमरजेंसी में कृपया तुरंत नज़दीकी अस्पताल जाएँ।</small>`
-                            : `<strong>🚨 24x7 Emergency Consultation (${isOnline ? 'Online' : 'In-clinic'}): Fee ₹${fee}</strong><br>No slot cutoff — priority consultation at Dr. P. N. Singh's earliest availability.<br><small>For life-threatening medical emergencies, please visit the nearest hospital immediately.</small>`;
+                            ? `<strong>🚨 24x7 इमरजेंसी परामर्श (${isOnline ? 'ऑनलाइन' : 'क्लीनिक'}): शुल्क ₹${fee}</strong><br>डॉक्टर आपसे <strong>1 घंटे के अंदर या जितनी जल्दी हो सके</strong> संपर्क करेंगे।<br><small>जानलेवा या गंभीर मेडिकल इमरजेंसी में कृपया तुरंत नज़दीकी अस्पताल जाएँ।</small>`
+                            : `<strong>🚨 24x7 Emergency Consultation (${isOnline ? 'Online' : 'In-clinic'}): Fee ₹${fee}</strong><br>Doctor will contact you <strong>within 1 hour or as soon as possible</strong>.<br><small>For life-threatening medical emergencies, please visit the nearest hospital immediately.</small>`;
                     }
                     return;
                 }
 
-                // NORMAL MODE INFO BANNER
+                // STANDARD MODE INFO BANNER
                 const normalFee = isOnline ? 500 : 400;
                 const scheduleSummary = isOnline
                     ? (isHi
-                        ? `<strong>ऑनलाइन (सामान्य) शुल्क: ₹${normalFee}</strong><br>सोम, मंगल, गुरु, शुक्र: दोपहर 3:00 – रात 8:00 बजे | बुध, शनि, रवि: सुबह 11:00 – रात 8:00 बजे<br><small>नोट: हर स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।</small>`
-                        : `<strong>Online (Normal) Fee: ₹${normalFee}</strong><br>Mon, Tue, Thu, Fri: 3:00 PM – 8:00 PM | Wed, Sat, Sun: 11:00 AM – 8:00 PM<br><small>Note: Booking closes 30 minutes before each slot starts.</small>`)
+                        ? `<strong>ऑनलाइन शुल्क: ₹${normalFee}</strong><br>सोम, मंगल, गुरु, शुक्र: दोपहर 3:00 – रात 8:00 बजे | बुध, शनि, रवि: सुबह 11:00 – रात 8:00 बजे<br><small>नोट: हर स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।</small>`
+                        : `<strong>Online Fee: ₹${normalFee}</strong><br>Mon, Tue, Thu, Fri: 3:00 PM – 8:00 PM | Wed, Sat, Sun: 11:00 AM – 8:00 PM<br><small>Note: Booking closes 30 minutes before each slot starts.</small>`)
                     : (isHi
-                        ? `<strong>क्लीनिक (सामान्य) शुल्क: ₹${normalFee}</strong><br>शनिवार: दोपहर 3:00 – रात 8:00 बजे | रविवार: सुबह 11:00 – शाम 7:00 बजे (सोम–शुक्र बंद)<br><small>नोट: हर स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।</small>`
-                        : `<strong>In-clinic (Normal) Fee: ₹${normalFee}</strong><br>Saturday: 3:00 PM – 8:00 PM | Sunday: 11:00 AM – 7:00 PM (Mon–Fri Closed)<br><small>Note: Booking closes 30 minutes before each slot starts.</small>`);
+                        ? `<strong>क्लीनिक शुल्क: ₹${normalFee}</strong><br>शनिवार: दोपहर 3:00 – रात 8:00 बजे | रविवार: सुबह 11:00 – शाम 7:00 बजे (सोम–शुक्र बंद)<br><small>नोट: हर स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।</small>`
+                        : `<strong>In-clinic Fee: ₹${normalFee}</strong><br>Saturday: 3:00 PM – 8:00 PM | Sunday: 11:00 AM – 7:00 PM (Mon–Fri Closed)<br><small>Note: Booking closes 30 minutes before each slot starts.</small>`);
 
                 if (infoBox) {
                     infoBox.className = 'schedule-info-box show';
@@ -555,7 +554,7 @@
                         ? CLINIC_SLOTS.morningToEight.slice()
                         : CLINIC_SLOTS.afternoonToEight.slice();
                 } else {
-                    // In-clinic Normal: Sat (6) -> 3 PM to 8 PM; Sun (0) -> 11 AM to 7 PM; Mon-Fri -> Closed
+                    // In-clinic: Sat (6) -> 3 PM to 8 PM; Sun (0) -> 11 AM to 7 PM; Mon-Fri -> Closed
                     if (dayOfWeek === 6) {
                         slots = CLINIC_SLOTS.afternoonToEight.slice();
                     } else if (dayOfWeek === 0) {
@@ -575,13 +574,13 @@
                     if (infoBox) {
                         infoBox.className = 'schedule-info-box show closed-info';
                         infoBox.innerHTML = isHi
-                            ? `<strong>⚠️ क्लीनिक बंद है:</strong> सामान्य ऑफलाइन परामर्श केवल <strong>शनिवार (3–8 PM)</strong> और <strong>रविवार (11 AM–7 PM)</strong> को उपलब्ध है। कृपया शनिवार/रविवार चुनें, या <strong>Online / Emergency</strong> विकल्प चुनें।`
-                            : `<strong>⚠️ Clinic Closed:</strong> Normal in-clinic visits are available only on <strong>Saturday (3:00 PM – 8:00 PM)</strong> and <strong>Sunday (11:00 AM – 7:00 PM)</strong>. Please select Sat/Sun, or choose <strong>Online / Emergency</strong>.`;
+                            ? `<strong>⚠️ क्लीनिक बंद है:</strong> ऑफलाइन परामर्श केवल <strong>शनिवार (3–8 PM)</strong> और <strong>रविवार (11 AM–7 PM)</strong> को उपलब्ध है। कृपया शनिवार/रविवार चुनें, या <strong>Online / Emergency</strong> विकल्प चुनें।`
+                            : `<strong>⚠️ Clinic Closed:</strong> In-clinic visits are available only on <strong>Saturday (3:00 PM – 8:00 PM)</strong> and <strong>Sunday (11:00 AM – 7:00 PM)</strong>. Please select Sat/Sun, or choose <strong>Online / Emergency</strong>.`;
                     }
                     return;
                 }
 
-                // Apply 30-Minute Cutoff for Today (Normal Online & Offline)
+                // Apply 30-Minute Cutoff for Today
                 if (selectedDate === currTodayIso) {
                     slots = slots.filter(slotStr => {
                         const slotMin = parseSlotToMinutes(slotStr);
@@ -598,8 +597,8 @@
                     if (infoBox) {
                         infoBox.className = 'schedule-info-box show closed-info';
                         infoBox.innerHTML = isHi
-                            ? `<strong>⏰ आज की सामान्य बुकिंग बंद हो चुकी है</strong> (स्लॉट शुरू होने से 30 मिनट पहले कटऑफ)। कृपया अगले दिन की तारीख चुनें, या तुरंत परामर्श के लिए <strong>Emergency</strong> चुनें।`
-                            : `<strong>⏰ Today's normal slots have closed</strong> (30-minute cutoff before slot start). Please choose a future date, or select <strong>Emergency</strong> for immediate priority.`;
+                            ? `<strong>⏰ आज की बुकिंग बंद हो चुकी है</strong> (स्लॉट शुरू होने से 30 मिनट पहले कटऑफ)। कृपया अगले दिन की तारीख चुनें, या तुरंत परामर्श के लिए <strong>Emergency</strong> चुनें।`
+                            : `<strong>⏰ Today's slots have closed</strong> (30-minute cutoff before slot start). Please choose a future date, or select <strong>Emergency</strong> for immediate priority.`;
                     }
                     return;
                 }
@@ -692,8 +691,8 @@
         "Email": "ईमेल",
         "Consultation mode": "परामर्श का माध्यम",
         "Choose": "चुनें",
-        "In-clinic (Normal — ₹400)": "क्लीनिक में आकर (सामान्य — ₹400)",
-        "Online (Normal — ₹500)": "ऑनलाइन (सामान्य — ₹500)",
+        "In-clinic — ₹400": "क्लीनिक में आकर — ₹400",
+        "Online — ₹500": "ऑनलाइन — ₹500",
         "In-clinic Emergency (24x7 — ₹600)": "क्लीनिक इमरजेंसी (24x7 — ₹600)",
         "Online Emergency (24x7 — ₹700)": "ऑनलाइन इमरजेंसी (24x7 — ₹700)",
         "Date": "तारीख",
