@@ -28,6 +28,7 @@
   .btn-small.active { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
   .count-text { color: #64748b; font-size: 0.9rem; margin-bottom: 16px; font-weight: 600; }
   .appt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .appt-card.urgent-card { border: 1px solid #fca5a5; border-left: 5px solid #dc2626; }
   .appt-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
   .appt-row:last-child { border-bottom: none; }
   .appt-label { color: #94a3b8; font-weight: 600; font-size: 0.75rem; }
@@ -35,6 +36,7 @@
   .appt-id { color: #0f766e; font-weight: 700; font-family: monospace; font-size: 0.95rem; }
   .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
   .badge.mode { background: #ecfdf5; color: #047857; }
+  .badge.urgent { background: #dc2626; color: #ffffff; margin-left: 6px; }
   .badge.new { background: #fef3c7; color: #b45309; }
   .badge.accepted { background: #d1fae5; color: #065f46; }
   .badge.completed { background: #e0e7ff; color: #3730a3; }
@@ -138,6 +140,25 @@ window.onload = function() {
     checkAndLoad(savedKey, true);
   }
 };
+
+function isUrgentAppt(a) {
+  return !!(
+    a.isEmergency ||
+    a.bookingType === 'emergency' ||
+    /emerg|urgent|priority/i.test(a.mode || '') ||
+    /emerg|urgent|priority/i.test(a.time || '')
+  );
+}
+
+function getDefaultFee(a) {
+  if (a.fee && Number(a.fee) > 0) return Number(a.fee);
+  var urgent = isUrgentAppt(a);
+  var online = /online/i.test(a.mode || '');
+  if (online && urgent) return 700;
+  if (!online && urgent) return 600;
+  if (online && !urgent) return 500;
+  return 400;
+}
 
 function getStepStore() {
   try {
@@ -484,17 +505,21 @@ function renderList() {
   for (var i = 0; i < list.length; i++) {
     var a = list[i];
     var st = a.status || 'new';
+    var urgent = isUrgentAppt(a);
+    var defaultFee = getDefaultFee(a);
     var isPaid = a.payment && a.payment.status === 'paid';
-    var payTxt = isPaid ? ('Paid Rs.' + a.payment.amount + ' (' + a.payment.method + ')') : 'Unpaid';
+    var payTxt = isPaid ? ('Paid Rs.' + a.payment.amount + ' (' + a.payment.method + ')') : ('Unpaid (Fee: Rs.' + defaultFee + ')');
     var drawerClass = openDrawers[a.id] ? 'action-drawer show' : 'action-drawer';
+    var cardClass = urgent ? 'appt-card urgent-card' : 'appt-card';
+    var urgentBadge = urgent ? '<span class="badge urgent">URGENT</span>' : '';
 
-    out += '<div class="appt-card">';
+    out += '<div class="' + cardClass + '">';
     out += '<div class="appt-row"><span class="appt-label">APPOINTMENT ID</span><span class="appt-id">' + esc(a.appointmentNumber || '-') + '</span></div>';
     out += '<div class="appt-row"><span class="appt-label">PATIENT NO.</span><span class="appt-val">' + esc(a.patientNumber || '-') + '</span></div>';
     out += '<div class="appt-row"><span class="appt-label">PATIENT NAME</span><span class="appt-val">' + esc(a.name || '-') + '</span></div>';
     out += '<div class="appt-row"><span class="appt-label">PHONE</span><span class="appt-val">' + esc(a.phone || '-') + '</span></div>';
     out += '<div class="appt-row"><span class="appt-label">DATE & TIME</span><span class="appt-val">' + niceDate(a.date) + ' ' + esc(a.time || '') + '</span></div>';
-    out += '<div class="appt-row"><span class="appt-label">MODE</span><span class="appt-val"><span class="badge mode">' + esc(a.mode || 'Clinic') + '</span></span></div>';
+    out += '<div class="appt-row"><span class="appt-label">MODE</span><span class="appt-val"><span class="badge mode">' + esc(a.mode || 'Clinic') + '</span>' + urgentBadge + '</span></div>';
     out += '<div class="appt-row"><span class="appt-label">STATUS</span><span class="appt-val"><span class="badge ' + esc(st) + '">' + esc(st.toUpperCase()) + '</span></span></div>';
     out += '<div class="appt-row"><span class="appt-label">EMAIL</span><span class="appt-val">' + esc(a.email || '-') + '</span></div>';
     out += '<div class="appt-row"><span class="appt-label">ACTION</span><span class="appt-val"><button type="button" class="open-btn" onclick="toggleBox(\'' + a.id + '\')">' + (openDrawers[a.id] ? 'Close' : 'Open') + '</button></span></div>';
@@ -513,7 +538,7 @@ function renderList() {
 
     if (st === 'accepted' && !isPaid) {
       out += '<div class="pay-box">';
-      out += '<input type="number" id="amt_' + a.id + '" value="400" style="width:80px;">';
+      out += '<input type="number" id="amt_' + a.id + '" value="' + defaultFee + '" style="width:80px;">';
       out += '<select id="mtd_' + a.id + '"><option value="cash">Cash</option><option value="upi">UPI</option></select>';
       out += '<button type="button" class="btn-act" style="background:#0f766e;" onclick="savePay(\'' + a.id + '\')">Mark Paid</button>';
       out += '</div>';
