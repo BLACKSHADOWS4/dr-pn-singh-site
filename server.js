@@ -63,6 +63,25 @@ const WA_TEMPLATE_CLINIC_NEW_APPOINTMENT = process.env.WHATSAPP_TEMPLATE_CLINIC_
 const WA_TEMPLATE_LANGUAGE = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en';
 
 // ==========================================
+// CLINIC SCHEDULE, FEES & 30-MIN CUTOFF RULES
+// ==========================================
+const CLINIC_FEES = {
+    offlineNormal: 400,
+    onlineNormal: 500,
+    offlineEmergency: 600,
+    onlineEmergency: 700
+};
+
+const CLINIC_SLOTS = {
+    morningToSeven: ['11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM'],
+    morningToEight: ['11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM'],
+    afternoonToEight: ['3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM']
+};
+
+const CUTOFF_MINUTES = 30;
+const EMERGENCY_TIME_LABEL = 'Priority (24x7 Emergency)';
+
+// ==========================================
 // MONGOOSE SCHEMAS & MODELS
 // ==========================================
 const appointmentSchema = new mongoose.Schema({
@@ -78,6 +97,8 @@ const appointmentSchema = new mongoose.Schema({
     date: String,
     time: String,
     mode: String,
+    isEmergency: { type: Boolean, default: false },
+    fee: { type: Number, default: 400 },
     concern: String,
     payment: {
         status: { type: String, default: 'unpaid' },
@@ -137,7 +158,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ==========================================
-// HELPERS & SMART DATE NORMALIZATION
+// HELPERS & SMART DATE/SLOT NORMALIZATION
 // ==========================================
 const clean = (value, max = 500) => String(value ?? '').trim().slice(0, max);
 const emailRegex = value => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -171,6 +192,70 @@ const todayString = () => {
     return `${p.year}-${p.month}-${p.day}`;
 };
 
+function indiaNowMinutes() {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+    }).formatToParts(new Date());
+    let h = 0, m = 0;
+    for (const part of parts) {
+        if (part.type === 'hour') h = Number(part.value) % 24;
+        if (part.type === 'minute') m = Number(part.value);
+    }
+    return h * 60 + m;
+}
+
+function parseSlotToMinutes(slotStr) {
+    const match = String(slotStr || '').match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i);
+    if (!match) return -1;
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2] || '0', 10);
+    const period = match[3].toUpperCase();
+    if (period === 'PM' && h < 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+}
+
+function getBookingMeta(mode, time = '') {
+    const isEmergency = /emerg|urgent|priority/i.test(mode || '') || /emerg|urgent|priority/i.test(time || '');
+    const isOnline = /online/i.test(mode || '');
+    let fee = CLINIC_FEES.offlineNormal;
+    if (isOnline && isEmergency) fee = CLINIC_FEES.onlineEmergency;
+    else if (!isOnline && isEmergency) fee = CLINIC_FEES.offlineEmergency;
+    else if (isOnline && !isEmergency) fee = CLINIC_FEES.onlineNormal;
+    return { isEmergency, isOnline, fee };
+}
+
+function getAvailableSlotsForDate(mode, dateStr) {
+    const { isEmergency, isOnline } = getBookingMeta(mode);
+    if (isEmergency) return { closedDay: false, slots: [EMERGENCY_TIME_LABEL] };
+
+    const dayOfWeek = new Date(`${dateStr}T12:00:00+05:30`).getDay(); // 0=Sun..6=Sat
+    let slots = [];
+
+    if (isOnline) {
+        // Wed(3), Sat(6), Sun(0): 11 AM - 8 PM | Mon, Tue, Thu, Fri: 3 PM - 8 PM
+        slots = (dayOfWeek === 0 || dayOfWeek === 3 || dayOfWeek === 6)
+            ? CLINIC_SLOTS.morningToEight.slice()
+            : CLINIC_SLOTS.afternoonToEight.slice();
+    } else {
+        // Offline Normal: Sat(6) 3 PM - 8 PM | Sun(0) 11 AM - 7 PM | Mon-Fri Closed
+        if (dayOfWeek === 6) slots = CLINIC_SLOTS.afternoonToEight.slice();
+        else if (dayOfWeek === 0) slots = CLINIC_SLOTS.morningToSeven.slice();
+        else return { closedDay: true, slots: [] };
+    }
+
+    // Apply 30-Minute Cutoff if booking for today
+    if (dateStr === todayString()) {
+        const nowMin = indiaNowMinutes();
+        slots = slots.filter(s => (parseSlotToMinutes(s) - nowMin) > CUTOFF_MINUTES);
+    }
+
+    return { closedDay: false, slots };
+}
+
 const isValidISODate = value => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
     const [year, month, day] = value.split('-').map(Number);
@@ -184,6 +269,13 @@ function normalizeDate(text) {
     const cleaned = String(text || '').trim();
     const currentToday = todayString();
     const [currYear, currMonth, currDay] = currentToday.split('-').map(Number);
+
+    if (/^(today|aaj|आज)$/i.test(cleaned)) return currentToday;
+    if (/^(tomorrow|kal|कल)$/i.test(cleaned)) {
+        const tmr = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const p = indiaDateParts(tmr);
+        return `${p.year}-${p.month}-${p.day}`;
+    }
 
     if (/^\d{1,2}$/.test(cleaned)) {
         let dayNum = Number(cleaned);
@@ -457,7 +549,8 @@ app.get('/api/clinic', (req, res) => {
         doctor: 'Dr. P. N. Singh',
         specialty: 'Neuropsychiatrist',
         tagline: 'Better Mental Health, Better Quality of Life.',
-        consultationFee: 400,
+        consultationFee: CLINIC_FEES.offlineNormal,
+        fees: CLINIC_FEES,
         address: 'C-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh',
         phone: CLINIC_PHONE,
         email: CLINIC_EMAIL,
@@ -475,8 +568,8 @@ app.post('/api/appointments', async (req, res) => {
     const phone = clean(b.phone, 30);
     const mail = clean(b.email, 120);
     let date = clean(b.date, 10);
-    const time = clean(b.time, 20);
-    const mode = clean(b.mode, 30);
+    let time = clean(b.time, 40);
+    const mode = clean(b.mode, 40);
     const concern = clean(b.concern, 500);
 
     if (!name || !phone || !date || !time || !mode) {
@@ -498,7 +591,33 @@ app.post('/api/appointments', async (req, res) => {
     if (!emailRegex(mail)) {
         return res.status(400).json({ ok: false, message: 'Please enter a valid email address.' });
     }
-    
+
+    const { isEmergency, fee } = getBookingMeta(mode, time);
+
+    if (isEmergency) {
+        time = EMERGENCY_TIME_LABEL;
+    } else {
+        const { closedDay, slots } = getAvailableSlotsForDate(mode, date);
+        if (closedDay) {
+            return res.status(400).json({
+                ok: false,
+                message: 'Normal in-clinic visits are only available on Saturday (3–8 PM) and Sunday (11 AM–7 PM). Please choose Sat/Sun, or select Online / Emergency.'
+            });
+        }
+        if (!slots.length) {
+            return res.status(400).json({
+                ok: false,
+                message: 'No normal slots remain for today (booking closes 30 minutes before each slot). Please select a future date or choose Emergency.'
+            });
+        }
+        if (!slots.includes(time)) {
+            return res.status(400).json({
+                ok: false,
+                message: `Selected time slot is unavailable or closed (30-min cutoff). Available slots: ${slots.join(', ')}`
+            });
+        }
+    }
+
     // Website Duplicate Check
     const existingAppt = await findActiveAppointmentByPhone(phone);
     if (existingAppt) {
@@ -521,6 +640,8 @@ app.post('/api/appointments', async (req, res) => {
         date,
         time,
         mode,
+        isEmergency,
+        fee,
         concern,
         payment: { status: 'unpaid', amount: null, method: null, paidAt: null }
     };
@@ -534,6 +655,7 @@ app.post('/api/appointments', async (req, res) => {
         message: 'Your appointment request has been received. The clinic will confirm the appointment.',
         appointmentId: appointment.id,
         appointmentNumber: appointment.appointmentNumber,
+        fee,
         whatsapp: {
             patient: whatsappResult.ok ? 'sent' : 'failed',
             clinic: clinicWhatsappResult.ok ? 'sent' : 'failed'
@@ -705,14 +827,13 @@ const i18n = {
         btnLocation: 'Clinic Location',
         btnFees: 'Fees & Timings',
         locationText: `📍 *Clinic Location*\n\nDr. P. N. Singh Clinic\nC-190, Bilandpur New Colony, Near Platinum MRI, Gorakhpur, Uttar Pradesh.\n\n🗺️ *Google Maps:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
-        feeText: `💵 *Fees & Consultation Timings*\n\n• *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n• *Fee:* ₹400 per session\n• *Clinic Hours:* Monday to Saturday, 10:00 AM – 7:00 PM (Closed Sundays).`,
+        feeText: `💵 *Fees & Consultation Timings*\n\n👨‍⚕️ *Doctor:* Dr. P. N. Singh (Neuropsychiatrist)\n\n🏥 *In-clinic (Normal) — ₹400*\n• Saturday: 3:00 PM – 8:00 PM\n• Sunday: 11:00 AM – 7:00 PM\n• Mon–Fri: Closed\n\n💻 *Online (Normal) — ₹500*\n• Mon, Tue, Thu, Fri: 3:00 PM – 8:00 PM\n• Wed, Sat, Sun: 11:00 AM – 8:00 PM\n\n🚨 *24x7 Emergency (Priority)*\n• In-clinic Emergency: ₹600\n• Online Emergency: ₹700\n\n⏰ _Note: Normal slot booking closes 30 mins before slot start._`,
         askName: `📅 *WhatsApp Appointment Booking*\n\nLet's get you scheduled! First, please reply with your *Full Name*:`,
-        askDate: (name) => `Thank you, *${name}*! 📅\n\nPlease enter the date you want to book for your consultation:`,
-        askTime: `Got it. What preferred time slot would you like? (e.g., *11:00 AM* or *Evening*)`,
-        askMode: `Please choose your consultation mode:\n\n1️⃣ *Clinic Visit*\n2️⃣ *Online Consultation*\n\n(Simply reply with *Clinic* or *Online*)`,
+        askMode: (name) => `Thank you, *${name}*! Please choose your consultation mode (reply *1*, *2*, *3*, or *4*):\n\n1️⃣ *In-clinic (Normal)* — ₹400\n2️⃣ *Online (Normal)* — ₹500\n3️⃣ *In-clinic Emergency (24x7)* — ₹600\n4️⃣ *Online Emergency (24x7)* — ₹700`,
+        askDate: (mode) => `Got it (*${mode}*). 📅\n\nPlease enter the date you want to book (e.g., *25/11/2026*, *Today*, or *Tomorrow*):`,
+        askTime: (slots) => `⏰ Please choose an available time slot (reply with the *number* or *time*):\n\n${slots.map((s, idx) => `${idx + 1}. *${s}*`).join('\n')}`,
         askConcern: `Almost done! Do you have any specific health concern or symptoms to share?\n\n*(Type your concern or simply type *Skip* to bypass)*`,
-        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n\nThe clinic will confirm your appointment shortly. You will receive your confirmed patient token number here soon!\n\n💬 *Direct Clinic WhatsApp:* If you need urgent assistance or don't hear back, message the clinic directly here: https://wa.me/919876766533`
-
+        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n• *Fee:* ₹${appt.fee}\n\nThe clinic will confirm your appointment shortly. You will receive your confirmed patient token number here soon!\n\n💬 *Direct Clinic WhatsApp:* If you need urgent assistance or don't hear back, message the clinic directly here: https://wa.me/919876766533`
     },
     hi: {
         greeting: `नमस्ते! मैं डॉ. पी. एन. सिंह क्लीनिक का वर्चुअल असिस्टेंट हूँ। आज हम आपकी कैसे मदद कर सकते हैं?`,
@@ -720,14 +841,13 @@ const i18n = {
         btnLocation: 'क्लीनिक का पता',
         btnFees: 'फीस और समय',
         locationText: `📍 *क्लीनिक का पता*\n\nडॉ. पी. एन. सिंह क्लीनिक\nसी-190, बिलंदपुर न्यू कॉलोनी, प्लैटिनम एमआरआई के पास, गोरखपुर, उत्तर प्रदेश।\n\n🗺️ *गूगल मैप्स:* https://maps.google.com/?q=Bilandpur+Gorakhpur`,
-        feeText: `💵 *फीस और समय*\n\n• *डॉक्टर:* डॉ. पी. एन. सिंह (न्यूरोसाइकियाट्रिस्ट)\n• *फीस:* ₹400 प्रति सेशन\n• *समय:* सोमवार - शनिवार, सुबह 10:00 – शाम 7:00 (रविवार बंद)।`,
+        feeText: `💵 *फीस और परामर्श का समय*\n\n👨‍⚕️ *डॉक्टर:* डॉ. पी. एन. सिंह (न्यूरोसाइकियाट्रिस्ट)\n\n🏥 *क्लीनिक (सामान्य) — ₹400*\n• शनिवार: दोपहर 3:00 – रात 8:00 बजे\n• रविवार: सुबह 11:00 – शाम 7:00 बजे\n• सोम–शुक्र: बंद\n\n💻 *ऑनलाइन (सामान्य) — ₹500*\n• सोम, मंगल, गुरु, शुक्र: दोपहर 3:00 – रात 8:00 बजे\n• बुध, शनि, रवि: सुबह 11:00 – रात 8:00 बजे\n\n🚨 *24x7 इमरजेंसी (प्राथमिकता)*\n• क्लीनिक इमरजेंसी: ₹600\n• ऑनलाइन इमरजेंसी: ₹700\n\n⏰ _नोट: सामान्य स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है।_`,
         askName: `📅 *व्हाट्सएप अपॉइंटमेंट बुकिंग*\n\nचलिए आपका अपॉइंटमेंट तय करते हैं! सबसे पहले, कृपया अपना *पूरा नाम* लिखकर भेजें:`,
-        askDate: (name) => `धन्यवाद, *${name}*! 📅\n\nकृपया वह तारीख दर्ज करें जिस दिन आप कंसल्टेशन अपॉइंटमेंट बुक करना चाहते हैं:`,
-        askTime: `समझ गया। आप कौन सा समय पसंद करेंगे? (उदाहरण: *11:00 AM* या *शाम*)`,
-        askMode: `कृपया परामर्श का माध्यम चुनें:\n\n1️⃣ *क्लीनिक आकर*\n2️⃣ *ऑनलाइन परामर्श*\n\n(बस *क्लीनिक* या *ऑनलाइन* लिखकर भेजें)`,
+        askMode: (name) => `धन्यवाद, *${name}*! कृपया परामर्श का माध्यम चुनें (*1*, *2*, *3*, या *4* लिखकर भेजें):\n\n1️⃣ *क्लीनिक (सामान्य)* — ₹400\n2️⃣ *ऑनलाइन (सामान्य)* — ₹500\n3️⃣ *क्लीनिक इमरजेंसी (24x7)* — ₹600\n4️⃣ *ऑनलाइन इमरजेंसी (24x7)* — ₹700`,
+        askDate: (mode) => `समझ गया (*${mode}*)। 📅\n\nकृपया वह तारीख दर्ज करें जिस दिन आप अपॉइंटमेंट बुक करना चाहते हैं (जैसे *25/11/2026*, *आज*, या *कल*):`,
+        askTime: (slots) => `⏰ कृपया उपलब्ध समय चुनें (*नंबर* या *समय* लिखकर भेजें):\n\n${slots.map((s, idx) => `${idx + 1}. *${s}*`).join('\n')}`,
         askConcern: `लगभग पूरा हो गया! क्या आपको अपनी किसी समस्या के बारे में बताना है?\n\n*(अपनी समस्या लिखें या इसे छोड़ने के लिए *Skip* लिखें)*`,
-            confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n\nक्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!\n\n💬 *क्लीनिक का सीधा WhatsApp:* अगर आपको तुरंत बात करनी हो या कोई सहायता चाहिए, तो सीधे क्लीनिक के WhatsApp पर मैसेज करें: https://wa.me/919876766533`
-
+        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n• *शुल्क:* ₹${appt.fee}\n\nक्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!\n\n💬 *क्लीनिक का सीधा WhatsApp:* अगर आपको तुरंत बात करनी हो या कोई सहायता चाहिए, तो सीधे क्लीनिक के WhatsApp पर मैसेज करें: https://wa.me/919876766533`
     }
 };
 
@@ -784,7 +904,6 @@ app.post('/webhook', async (req, res) => {
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].feeText);
                             }
-                            // YOUR FIX ADDED HERE (Button Click Check)
                             else if (btnTitle.includes('Book') || btnTitle.includes('अपॉइंटमेंट') || btnTitle.includes('Pre-book')) {
                                 const existingAppt = await findActiveAppointmentByPhone(senderPhone);
                                 if (existingAppt) {
@@ -818,9 +937,50 @@ app.post('/webhook', async (req, res) => {
                             }
                             else if (session.step === 'awaiting_name') {
                                 session.data.name = clean(userText, 100);
-                                session.step = 'awaiting_date';
+                                session.step = 'awaiting_mode';
                                 await session.save();
-                                await sendWhatsAppText(senderPhone, i18n[lang].askDate(session.data.name));
+                                await sendWhatsAppText(senderPhone, i18n[lang].askMode(session.data.name));
+                            }
+                            else if (session.step === 'awaiting_mode') {
+                                const t = userText.toLowerCase();
+                                let selectedMode = '';
+
+                                if (t === '1' || (t.includes('clinic') && !t.includes('emerg')) || (t.includes('क्लीनिक') && !t.includes('इमरजेंसी'))) {
+                                    selectedMode = 'In-clinic';
+                                } else if (t === '2' || (t.includes('online') && !t.includes('emerg')) || (t.includes('ऑनलाइन') && !t.includes('इमरजेंसी'))) {
+                                    selectedMode = 'Online';
+                                } else if (t === '3' || (t.includes('clinic') && t.includes('emerg')) || (t.includes('क्लीनिक') && t.includes('इमरजेंसी'))) {
+                                    selectedMode = 'In-clinic (Emergency)';
+                                } else if (t === '4' || (t.includes('online') && t.includes('emerg')) || (t.includes('ऑनलाइन') && t.includes('इमरजेंसी')) || t.includes('emerg') || t.includes('इमरजेंसी')) {
+                                    selectedMode = 'Online (Emergency)';
+                                }
+
+                                if (!selectedMode) {
+                                    const errMsg = lang === 'hi'
+                                        ? `❌ कृपया सही विकल्प चुनने के लिए केवल *1*, *2*, *3*, या *4* लिखकर भेजें।`
+                                        : `❌ Please reply with *1*, *2*, *3*, or *4* to select your consultation mode.`;
+                                    await sendWhatsAppText(senderPhone, errMsg);
+                                    return res.status(200).send('EVENT_RECEIVED');
+                                }
+
+                                session.data.mode = selectedMode;
+                                const { isEmergency } = getBookingMeta(selectedMode);
+
+                                if (isEmergency) {
+                                    // 24x7 Emergency bypasses date/time selection
+                                    session.data.date = todayString();
+                                    session.data.time = EMERGENCY_TIME_LABEL;
+                                    session.step = 'awaiting_concern';
+                                    await session.save();
+                                    const emergNote = lang === 'hi'
+                                        ? `🚨 *24x7 इमरजेंसी प्राथमिकता (${selectedMode})* चुनी गई है।\n\n${i18n.hi.askConcern}`
+                                        : `🚨 *24x7 Emergency Priority (${selectedMode})* selected.\n\n${i18n.en.askConcern}`;
+                                    await sendWhatsAppText(senderPhone, emergNote);
+                                } else {
+                                    session.step = 'awaiting_date';
+                                    await session.save();
+                                    await sendWhatsAppText(senderPhone, i18n[lang].askDate(selectedMode));
+                                }
                             }
                             else if (session.step === 'awaiting_date') {
                                 const parsedDate = normalizeDate(userText);
@@ -834,32 +994,63 @@ app.post('/webhook', async (req, res) => {
                                     return res.status(200).send('EVENT_RECEIVED');
                                 }
 
+                                const { closedDay, slots } = getAvailableSlotsForDate(session.data.mode, parsedDate);
+                                if (closedDay) {
+                                    const closedMsg = lang === 'hi'
+                                        ? `⚠️ *क्लीनिक इस दिन बंद रहता है।* सामान्य ऑफलाइन परामर्श केवल *शनिवार (3–8 PM)* और *रविवार (11 AM–7 PM)* को उपलब्ध है। कृपया शनिवार या रविवार की तारीख दर्ज करें:`
+                                        : `⚠️ *Clinic is closed on this day.* Normal in-clinic visits are available only on *Saturday (3–8 PM)* and *Sunday (11 AM–7 PM)*. Please enter a Saturday or Sunday date:`;
+                                    await sendWhatsAppText(senderPhone, closedMsg);
+                                    return res.status(200).send('EVENT_RECEIVED');
+                                }
+
+                                if (!slots.length) {
+                                    const cutoffMsg = lang === 'hi'
+                                        ? `⏰ *आज के सभी सामान्य स्लॉट बंद हो चुके हैं* (स्लॉट शुरू होने से 30 मिनट पहले बुकिंग बंद हो जाती है)। कृपया कल या किसी अगली तारीख को चुनें:`
+                                        : `⏰ *All normal slots for today have closed* (30-minute cutoff before slot start). Please enter tomorrow's or a future date:`;
+                                    await sendWhatsAppText(senderPhone, cutoffMsg);
+                                    return res.status(200).send('EVENT_RECEIVED');
+                                }
+
                                 session.data.date = parsedDate;
                                 session.step = 'awaiting_time';
                                 await session.save();
-                                await sendWhatsAppText(senderPhone, i18n[lang].askTime);
+                                await sendWhatsAppText(senderPhone, i18n[lang].askTime(slots));
                             }
                             else if (session.step === 'awaiting_time') {
-                                let timeText = clean(userText, 20);
-                                if (/^\d{1,2}$/.test(timeText)) {
-                                    timeText = timeText + ':00 AM';
+                                const { slots } = getAvailableSlotsForDate(session.data.mode, session.data.date);
+                                if (!slots.length) {
+                                    session.step = 'awaiting_date';
+                                    await session.save();
+                                    const retryDateMsg = lang === 'hi'
+                                        ? `⏰ इस तारीख के सभी स्लॉट अब बंद हो चुके हैं। कृपया कोई अगली तारीख दर्ज करें:`
+                                        : `⏰ All slots for that date have now closed. Please enter a future date:`;
+                                    await sendWhatsAppText(senderPhone, retryDateMsg);
+                                    return res.status(200).send('EVENT_RECEIVED');
                                 }
-                                session.data.time = timeText;
-                                session.step = 'awaiting_mode';
-                                await session.save();
-                                await sendWhatsAppText(senderPhone, i18n[lang].askMode);
-                            }
-                            else if (session.step === 'awaiting_mode') {
-                                const text = userText.toLowerCase();
-                                let selectedMode = 'Clinic Visit';
-                                if (text.includes('2') || text.includes('online') || text.includes('ऑनलाइन')) {
-                                    selectedMode = 'Online Consultation';
-                                } else if (text.includes('1') || text.includes('clinic') || text.includes('क्लीनिक') || text.includes('आकर')) {
-                                    selectedMode = 'Clinic Visit';
+
+                                let chosenSlot = null;
+                                const trimmed = userText.trim();
+                                const numIdx = Number(trimmed);
+                                if (Number.isInteger(numIdx) && numIdx >= 1 && numIdx <= slots.length) {
+                                    chosenSlot = slots[numIdx - 1];
                                 } else {
-                                    selectedMode = clean(userText, 30);
+                                    const normalizedInput = trimmed.toUpperCase().replace(/\s+/g, ' ');
+                                    chosenSlot = slots.find(s =>
+                                        s.toUpperCase() === normalizedInput ||
+                                        s.toUpperCase().replace(':00 ', ' ') === normalizedInput ||
+                                        s.toUpperCase().replace(':00 ', '') === normalizedInput.replace(/\s+/g, '')
+                                    ) || null;
                                 }
-                                session.data.mode = selectedMode;
+
+                                if (!chosenSlot) {
+                                    const badTimeMsg = lang === 'hi'
+                                        ? `❌ कृपया नीचे दी गई सूची में से सही *नंबर* (जैसे 1, 2) या *समय* चुनें:\n\n${slots.map((s, idx) => `${idx + 1}. *${s}*`).join('\n')}`
+                                        : `❌ Please pick a valid *number* (e.g., 1, 2) or *time* from the list below:\n\n${slots.map((s, idx) => `${idx + 1}. *${s}*`).join('\n')}`;
+                                    await sendWhatsAppText(senderPhone, badTimeMsg);
+                                    return res.status(200).send('EVENT_RECEIVED');
+                                }
+
+                                session.data.time = chosenSlot;
                                 session.step = 'awaiting_concern';
                                 await session.save();
                                 await sendWhatsAppText(senderPhone, i18n[lang].askConcern);
@@ -867,7 +1058,7 @@ app.post('/webhook', async (req, res) => {
                             else if (session.step === 'awaiting_concern') {
                                 const rawConcern = clean(userText, 500);
                                 session.data.concern = (rawConcern.toLowerCase() === 'none' || rawConcern.toLowerCase() === 'skip') ? '' : rawConcern;
-                                
+
                                 // SECOND SAFETY CHECK (Before saving to DB)
                                 const finalCheckAppt = await findActiveAppointmentByPhone(senderPhone);
                                 if (finalCheckAppt) {
@@ -883,6 +1074,7 @@ app.post('/webhook', async (req, res) => {
                                 session.step = 'idle';
                                 await session.save();
 
+                                const { isEmergency, fee } = getBookingMeta(session.data.mode, session.data.time);
                                 const appointmentNumber = await generateAppointmentNumber();
                                 const formattedPhone = whatsappPhone(senderPhone);
                                 const appointment = {
@@ -897,6 +1089,8 @@ app.post('/webhook', async (req, res) => {
                                     date: session.data.date,
                                     time: session.data.time,
                                     mode: session.data.mode,
+                                    isEmergency,
+                                    fee,
                                     concern: session.data.concern,
                                     payment: { status: 'unpaid', amount: null, method: null, paidAt: null }
                                 };
