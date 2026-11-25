@@ -835,7 +835,7 @@ const i18n = {
         askDate: (mode) => `Got it (*${mode}*). 📅\n\nPlease enter the date you want to book (e.g., *25/11/2026*, *Today*, or *Tomorrow*):`,
         askTime: (slots) => `⏰ Please choose an available time slot (reply with the *number* or *time*):\n\n${slots.map((s, idx) => `${idx + 1}. *${s}*`).join('\n')}`,
         askConcern: `Almost done! Do you have any specific health concern or symptoms to share?\n\n*(Type your concern or simply type *Skip* to bypass)*`,
-        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n• *Fee:* ₹${appt.fee}\n\n${appt.isEmergency ? '🚨 *Priority Care:* Dr. P. N. Singh will contact you within *1 hour or as soon as possible*.' : 'The clinic will confirm your appointment shortly. You will receive your confirmed patient token number here soon!'}\n\n💬 *Direct Clinic WhatsApp:* If you need urgent assistance or don't hear back, message the clinic directly here: https://wa.me/919876766533`
+        confirm: (appt) => `✅ *Appointment Request Submitted Successfully!*\n\n• *Date:* ${formatDate(appt.date)}\n• *Time:* ${appt.time}\n• *Mode:* ${appt.mode}\n• *Fee:* ₹${appt.fee}\n\n${appt.isEmergency ? '🚨 *Priority Care:* Dr. P. N. Singh will contact you within *1 hour or as soon as possible*.' : 'The clinic will confirm your appointment shortly. You will receive your confirmed patient token number here soon!'}\n\n💬 *Direct Clinic WhatsApp:* If you need urgent assistance or don't hear back, message the clinic directly here: https://wa.me/918765904948`
     },
     hi: {
         greeting: `नमस्ते! मैं डॉ. पी. एन. सिंह क्लीनिक का वर्चुअल असिस्टेंट हूँ। आज हम आपकी कैसे मदद कर सकते हैं?`,
@@ -849,7 +849,7 @@ const i18n = {
         askDate: (mode) => `समझ गया (*${mode}*)। 📅\n\nकृपया वह तारीख दर्ज करें जिस दिन आप अपॉइंटमेंट बुक करना चाहते हैं (जैसे *25/11/2026*, *आज*, या *कल*):`,
         askTime: (slots) => `⏰ कृपया उपलब्ध समय चुनें (*नंबर* या *समय* लिखकर भेजें):\n\n${slots.map((s, idx) => `${idx + 1}. *${s}*`).join('\n')}`,
         askConcern: `लगभग पूरा हो गया! क्या आपको अपनी किसी समस्या के बारे में बताना है?\n\n*(अपनी समस्या लिखें या इसे छोड़ने के लिए *Skip* लिखें)*`,
-        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n• *शुल्क:* ₹${appt.fee}\n\n${appt.isEmergency ? '🚨 *प्राथमिकता:* डॉ. पी. एन. सिंह आपसे *1 घंटे के अंदर या जितनी जल्दी हो सके* संपर्क करेंगे।' : 'क्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!'}\n\n💬 *क्लीनिक का सीधा WhatsApp:* अगर आपको तुरंत बात करनी हो या कोई सहायता चाहिए, तो सीधे क्लीनिक के WhatsApp पर मैसेज करें: https://wa.me/919876766533`
+        confirm: (appt) => `✅ *अपॉइंटमेंट का अनुरोध सफलतापूर्वक हो गया!*\n\n• *तारीख:* ${formatDate(appt.date)}\n• *समय:* ${appt.time}\n• *माध्यम:* ${appt.mode}\n• *शुल्क:* ₹${appt.fee}\n\n${appt.isEmergency ? '🚨 *प्राथमिकता:* डॉ. पी. एन. सिंह आपसे *1 घंटे के अंदर या जितनी जल्दी हो सके* संपर्क करेंगे।' : 'क्लीनिक जल्द ही आपके अपॉइंटमेंट की पुष्टि करेगा और आपको यहाँ टोकन नंबर भेज दिया जाएगा!'}\n\n💬 *क्लीनिक का सीधा WhatsApp:* अगर आपको तुरंत बात करनी हो या कोई सहायता चाहिए, तो सीधे क्लीनिक के WhatsApp पर मैसेज करें: https://wa.me/918765904948`
     }
 };
 
